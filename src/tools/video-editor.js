@@ -1,17 +1,19 @@
 /**
  * Video Editor renderer logic.
  * Loaded after renderer.js — uses window.api (preload bridge) and the global
- * showPanel / formatBytes functions defined in renderer.js.
+ * formatBytes function defined in renderer.js.
  */
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const ve = {
-  project: null,   // { bucket, prefix, name }
-  files:   [],     // S3 objects in the project folder (library)
-  strip:   [],     // ordered clip objects: { key, name, localPath, thumbnail, downloading }
-  player: { isPlaying: false, currentIdx: -1 },
-  drag:    null,   // { type: 'strip'|'library', index?, key? }
+  project:  null,   // { bucket, prefix, name }
+  manifest: null,   // last-read manifest; updated on save
+  files:    [],     // S3 objects in the project folder (library)
+  strip:    [],     // ordered clip objects (see addToStrip for shape)
+  player:   { isPlaying: false, currentIdx: -1 },
+  drag:     null,   // { type: 'strip'|'library', index?, key? }
+  dirty:    false,
 };
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -31,6 +33,7 @@ const veTimeDisplay  = document.getElementById('ve-time-display');
 const veCtrlPlay     = document.getElementById('ve-ctrl-play');
 const veOverlay      = document.getElementById('ve-player-overlay');
 const veOverlayPlay  = document.getElementById('ve-overlay-play');
+const veSaveBtn      = document.getElementById('ve-save-btn');
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
@@ -97,19 +100,142 @@ document.getElementById('ve-create-project-btn').addEventListener('click', async
 
 async function openProject(project) {
   const cfg = await window.api.aws.getConfig();
-  ve.project = { bucket: cfg.bucket, prefix: project.prefix, name: project.name };
-  ve.strip = [];
-  ve.files = [];
-  ve.player = { isPlaying: false, currentIdx: -1 };
+  ve.project  = { bucket: cfg.bucket, prefix: project.prefix, name: project.name };
+  ve.manifest = null;
+  ve.strip    = [];
+  ve.files    = [];
+  ve.player   = { isPlaying: false, currentIdx: -1 };
+  ve.dirty    = false;
 
   veProjectTitle.textContent = project.name;
   veVideo.src = '';
   veOverlay.style.display = '';
   veCtrlPlay.textContent = '▶';
+  updateSaveBtn();
 
   showView('editor');
   renderStrip();
-  loadLibrary();
+
+  // Read manifest and load library in parallel
+  const [manifestResult] = await Promise.all([
+    window.api.video.readProject({ bucket: cfg.bucket, prefix: project.prefix }),
+    loadLibrary(),
+  ]);
+
+  if (manifestResult.ok) {
+    ve.manifest = manifestResult.manifest;
+    const videoTrack = manifestResult.manifest.tracks?.find((t) => t.type === 'video')
+      ?? manifestResult.manifest.tracks?.[0];
+    const savedClips = videoTrack?.clips ?? [];
+
+    if (savedClips.length > 0) {
+      ve.strip = savedClips.map((c) => ({
+        id:          c.id,
+        key:         c.src,
+        name:        c.src.split('/').pop(),
+        duration:    c.duration    ?? 0,
+        trimIn:      c.trim?.in    ?? 0,
+        trimOut:     c.trim?.out   ?? (c.duration ?? 0),
+        volume:      c.volume      ?? 1.0,
+        transitions: c.transitions ?? {},
+        effects:     c.effects     ?? [],
+        meta:        c.meta        ?? {},
+        localPath:   null,
+        thumbnail:   null,
+        downloading: true,
+      }));
+      renderStrip();
+      ve.strip.forEach((_, idx) => downloadAndPrepare(idx));
+    }
+  } else {
+    // New or unreadable manifest — seed an in-memory one so save works
+    ve.manifest = makeEmptyManifest(project.name);
+  }
+}
+
+function makeEmptyManifest(name) {
+  return {
+    version:   1,
+    name,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    settings:  { frameRate: 30, resolution: { width: 1920, height: 1080 } },
+    tracks:    [{ id: 'track-v1', type: 'video', label: 'Video 1', muted: false, clips: [] }],
+  };
+}
+
+// ── Dirty tracking ────────────────────────────────────────────────────────────
+
+function markDirty() {
+  if (ve.dirty) return;
+  ve.dirty = true;
+  updateSaveBtn();
+}
+
+function markClean() {
+  ve.dirty = false;
+  updateSaveBtn();
+}
+
+function updateSaveBtn() {
+  veSaveBtn.disabled = !ve.dirty;
+  veSaveBtn.textContent = ve.dirty ? 'Save' : 'Saved ✓';
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+
+veSaveBtn.addEventListener('click', saveStrip);
+
+async function saveStrip() {
+  veSaveBtn.disabled = true;
+  veSaveBtn.textContent = 'Saving…';
+
+  // Build manifest clips by laying the strip end-to-end
+  let cursor = 0;
+  const clips = ve.strip.map((clip) => {
+    const dur = clip.duration || 0;
+    const mc = {
+      id:          clip.id,
+      src:         clip.key,
+      startTime:   cursor,
+      duration:    dur,
+      trim:        { in: clip.trimIn ?? 0, out: clip.trimOut ?? dur },
+      volume:      clip.volume      ?? 1.0,
+      transitions: clip.transitions ?? {},
+      effects:     clip.effects     ?? [],
+      meta:        clip.meta        ?? {},
+    };
+    cursor += dur;
+    return mc;
+  });
+
+  const updatedManifest = {
+    ...ve.manifest,
+    updatedAt: new Date().toISOString(),
+    tracks: [
+      {
+        ...(ve.manifest.tracks?.[0] ?? { id: 'track-v1', type: 'video', label: 'Video 1', muted: false }),
+        clips,
+      },
+      ...(ve.manifest.tracks?.slice(1) ?? []),
+    ],
+  };
+
+  const result = await window.api.video.saveProject({
+    bucket:   ve.project.bucket,
+    prefix:   ve.project.prefix,
+    manifest: updatedManifest,
+  });
+
+  if (result.ok) {
+    ve.manifest = updatedManifest;
+    markClean();
+  } else {
+    // Re-enable on failure so user can retry
+    ve.dirty = true;
+    updateSaveBtn();
+    alert(`Save failed: ${result.error}`);
+  }
 }
 
 // ── Library ───────────────────────────────────────────────────────────────────
@@ -169,15 +295,27 @@ function renderLibrary() {
 // ── Strip ─────────────────────────────────────────────────────────────────────
 
 function addToStrip(key) {
-  const name = key.split('/').pop();
-  const clip = { key, name, localPath: null, thumbnail: null, downloading: true };
-  ve.strip.push(clip);
+  ve.strip.push({
+    id:          generateId(),
+    key,
+    name:        key.split('/').pop(),
+    duration:    0,    // filled in after download
+    trimIn:      0,
+    trimOut:     0,    // filled in after download
+    volume:      1.0,
+    transitions: {},
+    effects:     [],
+    meta:        {},
+    localPath:   null,
+    thumbnail:   null,
+    downloading: true,
+  });
   renderStrip();
+  markDirty();
   downloadAndPrepare(ve.strip.length - 1);
 }
 
 function renderStrip() {
-  // Remove all clip cards (keep the empty placeholder)
   Array.from(veStrip.children).forEach((child) => {
     if (child !== veStripEmpty) child.remove();
   });
@@ -185,9 +323,9 @@ function renderStrip() {
   veStripEmpty.style.display = ve.strip.length === 0 ? 'flex' : 'none';
 
   ve.strip.forEach((clip, idx) => {
+    const isPlaying = ve.player.isPlaying && ve.player.currentIdx === idx;
     const card = document.createElement('div');
-    card.className = 've-clip-card';
-    if (ve.player.isPlaying && ve.player.currentIdx === idx) card.classList.add('ve-playing');
+    card.className = 've-clip-card' + (isPlaying ? ' ve-playing' : '');
     card.draggable = true;
     card.dataset.idx = idx;
 
@@ -200,10 +338,7 @@ function renderStrip() {
             ? `<img src="${clip.thumbnail}" alt="" />`
             : '<span class="ve-clip-no-thumb">🎬</span>'
         }
-        ${ve.player.isPlaying && ve.player.currentIdx === idx
-          ? '<div class="ve-clip-playing-overlay">▶</div>'
-          : ''
-        }
+        ${isPlaying ? '<div class="ve-clip-playing-overlay">▶</div>' : ''}
       </div>
       <div class="ve-clip-name" title="${escHtml(clip.name)}">${escHtml(clip.name)}</div>
     `;
@@ -213,9 +348,9 @@ function renderStrip() {
       ve.strip.splice(idx, 1);
       if (ve.player.currentIdx >= ve.strip.length) ve.player.currentIdx = ve.strip.length - 1;
       renderStrip();
+      markDirty();
     });
 
-    // Drag to reorder within strip
     card.addEventListener('dragstart', (e) => {
       if (e.target.classList.contains('ve-clip-remove')) { e.preventDefault(); return; }
       ve.drag = { type: 'strip', index: idx };
@@ -241,6 +376,7 @@ function renderStrip() {
         const [moved] = ve.strip.splice(ve.drag.index, 1);
         ve.strip.splice(idx, 0, moved);
         renderStrip();
+        markDirty();
       }
     });
 
@@ -297,7 +433,6 @@ document.getElementById('ve-add-files-btn').addEventListener('click', async () =
 });
 
 async function handleDroppedFiles(files, addToStripAfter) {
-  // In Electron, File objects have a .path property with the local filesystem path
   const filePaths = files.map((f) => f.path).filter(Boolean);
   if (!filePaths.length) return;
 
@@ -317,18 +452,24 @@ async function handleDroppedFiles(files, addToStripAfter) {
   }
 }
 
-// ── Download & thumbnails ─────────────────────────────────────────────────────
+// ── Download & video info ─────────────────────────────────────────────────────
 
 async function downloadAndPrepare(idx) {
   const clip = ve.strip[idx];
   if (!clip) return;
 
-  const { bucket } = ve.project;
-  const result = await window.api.video.downloadClip({ bucket, key: clip.key });
+  const result = await window.api.video.downloadClip({ bucket: ve.project.bucket, key: clip.key });
 
   if (result.ok) {
     clip.localPath = result.localPath;
-    clip.thumbnail = await generateThumbnail(result.localPath);
+    const { thumbnail, duration } = await extractVideoInfo(result.localPath);
+    clip.thumbnail = thumbnail;
+    // Only update duration when we don't already have it from a saved manifest
+    if (!clip.duration) {
+      clip.duration = duration;
+      clip.trimOut  = duration;
+      markDirty(); // now we know the real duration; worth saving
+    }
   } else {
     console.error('Download failed:', result.error);
   }
@@ -336,23 +477,27 @@ async function downloadAndPrepare(idx) {
   clip.downloading = false;
   renderStrip();
 
-  // If playback was waiting on this clip, start it now
+  // Resume playback if this clip was being waited on
   if (ve.player.isPlaying && ve.player.currentIdx === idx && clip.localPath) {
     playClip(idx);
   }
 }
 
-function generateThumbnail(localPath) {
+/**
+ * Load a local video file into a hidden element, seek to an early frame,
+ * capture a thumbnail, and return both the image and the total duration.
+ */
+function extractVideoInfo(localPath) {
   return new Promise((resolve) => {
     const video = document.createElement('video');
-    video.muted = true;
+    video.muted   = true;
     video.preload = 'metadata';
-    // Keep it off-screen but attached to DOM (required for Chromium canvas capture)
+    // Must be in DOM for Chromium's canvas drawImage to work
     video.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:-2px';
     document.body.appendChild(video);
 
     const cleanup = () => { try { video.remove(); } catch {} };
-    const timeout = setTimeout(() => { cleanup(); resolve(null); }, 12000);
+    const timeout = setTimeout(() => { cleanup(); resolve({ thumbnail: null, duration: 0 }); }, 12000);
 
     video.addEventListener('loadedmetadata', () => {
       video.currentTime = Math.min(0.5, (video.duration || 1) * 0.1);
@@ -360,20 +505,25 @@ function generateThumbnail(localPath) {
 
     video.addEventListener('seeked', () => {
       clearTimeout(timeout);
+      const duration = isFinite(video.duration) ? video.duration : 0;
+      let thumbnail = null;
       try {
         const canvas = document.createElement('canvas');
-        canvas.width = 160;
+        canvas.width  = 160;
         canvas.height = 90;
         canvas.getContext('2d').drawImage(video, 0, 0, 160, 90);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      } catch {
-        resolve(null);
-      } finally {
-        cleanup();
-      }
+        thumbnail = canvas.toDataURL('image/jpeg', 0.8);
+      } catch {}
+      cleanup();
+      resolve({ thumbnail, duration });
     });
 
-    video.addEventListener('error', () => { clearTimeout(timeout); cleanup(); resolve(null); });
+    video.addEventListener('error', () => {
+      clearTimeout(timeout);
+      cleanup();
+      resolve({ thumbnail: null, duration: 0 });
+    });
+
     video.src = `file://${localPath}`;
   });
 }
@@ -400,7 +550,7 @@ function startPlayback(fromIdx = null) {
   if (!clip) return;
 
   if (clip.downloading || !clip.localPath) {
-    // Mark as intending to play; downloadAndPrepare will call playClip when ready
+    // Clip still downloading — flag intent; downloadAndPrepare will resume
     ve.player.isPlaying = true;
     ve.player.currentIdx = idx;
     veCtrlPlay.textContent = '⟳';
@@ -414,13 +564,13 @@ function playClip(idx) {
   const clip = ve.strip[idx];
   if (!clip?.localPath) return;
 
-  ve.player.isPlaying = true;
+  ve.player.isPlaying  = true;
   ve.player.currentIdx = idx;
 
   veVideo.src = `file://${clip.localPath}`;
   veVideo.play().catch((err) => console.error('Playback error:', err));
 
-  veCtrlPlay.textContent = '⏸';
+  veCtrlPlay.textContent  = '⏸';
   veOverlay.style.display = 'none';
   renderStrip();
 }
@@ -428,21 +578,19 @@ function playClip(idx) {
 function stopPlayback() {
   ve.player.isPlaying = false;
   veVideo.pause();
-  veCtrlPlay.textContent = '▶';
+  veCtrlPlay.textContent  = '▶';
   veOverlay.style.display = '';
   renderStrip();
 }
 
-// Advance to next clip when current one ends
 veVideo.addEventListener('ended', () => {
   const nextIdx = ve.player.currentIdx + 1;
   if (nextIdx < ve.strip.length) {
     startPlayback(nextIdx);
   } else {
-    // End of strip — reset to beginning
-    ve.player.isPlaying = false;
+    ve.player.isPlaying  = false;
     ve.player.currentIdx = 0;
-    veCtrlPlay.textContent = '▶';
+    veCtrlPlay.textContent  = '▶';
     veOverlay.style.display = '';
     renderStrip();
   }
@@ -452,10 +600,9 @@ veVideo.addEventListener('timeupdate', () => {
   if (!veVideo.duration) return;
   const pct = (veVideo.currentTime / veVideo.duration) * 100;
   veProgressFill.style.width = `${pct}%`;
-  veTimeDisplay.textContent = `${fmtTime(veVideo.currentTime)} / ${fmtTime(veVideo.duration)}`;
+  veTimeDisplay.textContent  = `${fmtTime(veVideo.currentTime)} / ${fmtTime(veVideo.duration)}`;
 });
 
-// Click progress bar to seek
 veProgressBar.addEventListener('click', (e) => {
   if (!veVideo.duration) return;
   const rect = veProgressBar.getBoundingClientRect();
@@ -463,6 +610,10 @@ veProgressBar.addEventListener('click', (e) => {
 });
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
 
 function fmtTime(sec) {
   if (!isFinite(sec)) return '0:00';

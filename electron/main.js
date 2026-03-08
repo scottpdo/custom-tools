@@ -154,3 +154,11 @@ ipcMain.handle('video:openFileDialog', async () => {
 ipcMain.handle('video:uploadFiles', async (_event, opts) => {
   return video.uploadFiles(opts);
 });
+
+ipcMain.handle('video:readProject', async (_event, opts) => {
+  return video.readProject(opts);
+});
+
+ipcMain.handle('video:saveProject', async (_event, opts) => {
+  return video.saveProject(opts);
+});

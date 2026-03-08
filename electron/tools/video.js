@@ -63,7 +63,20 @@ async function createProject({ bucket, name } = {}) {
     version: 1,
     name: safeName,
     createdAt: new Date().toISOString(),
-    clips: [],
+    updatedAt: new Date().toISOString(),
+    settings: {
+      frameRate: 30,
+      resolution: { width: 1920, height: 1080 },
+    },
+    tracks: [
+      {
+        id: 'track-v1',
+        type: 'video',
+        label: 'Video 1',
+        muted: false,
+        clips: [],
+      },
+    ],
   };
 
   try {
@@ -138,9 +151,43 @@ async function uploadFiles({ bucket, prefix, filePaths } = {}) {
   return { ok: true, results };
 }
 
+// ── Manifest read / write ─────────────────────────────────────────────────────
+
+async function readProject({ bucket, prefix } = {}) {
+  const resolvedBucket = bucket || getAwsConfig().bucket;
+  try {
+    const result = await s3.getObject({ bucket: resolvedBucket, key: `${prefix}${MANIFEST_FILENAME}` });
+    if (!result.ok) return result;
+    const manifest = JSON.parse(Buffer.from(result.body, 'base64').toString('utf8'));
+    return { ok: true, manifest };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+async function saveProject({ bucket, prefix, manifest } = {}) {
+  const resolvedBucket = bucket || getAwsConfig().bucket;
+  try {
+    const client = new S3Client(buildClientConfig());
+    await client.send(
+      new PutObjectCommand({
+        Bucket: resolvedBucket,
+        Key: `${prefix}${MANIFEST_FILENAME}`,
+        Body: JSON.stringify(manifest, null, 2),
+        ContentType: 'application/json',
+      })
+    );
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 module.exports = {
   listProjects,
   createProject,
+  readProject,
+  saveProject,
   listProjectFiles,
   downloadClip,
   openFileDialog,

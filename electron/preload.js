@@ -40,5 +40,7 @@ contextBridge.exposeInMainWorld('api', {
     downloadClip: (opts) => invoke('video:downloadClip', opts),
     openFileDialog: () => invoke('video:openFileDialog'),
     uploadFiles: (opts) => invoke('video:uploadFiles', opts),
+    readProject: (opts) => invoke('video:readProject', opts),
+    saveProject: (opts) => invoke('video:saveProject', opts),
   },
 });

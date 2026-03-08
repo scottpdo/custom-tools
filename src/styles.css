@@ -292,6 +292,7 @@ label input  { width: 360px; }
 .ve-project-info              { display: flex; flex-direction: column; gap: 3px; }
 .ve-project-name              { font-weight: 600; }
 .ve-back-btn                  { background: var(--color-surface2) !important; color: var(--color-text) !important; }
+.ve-save-btn:disabled         { background: var(--color-surface2) !important; color: var(--color-success) !important; opacity: 1 !important; cursor: default; }
 
 /* Workspace split */
 .ve-workspace {

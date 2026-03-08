@@ -172,4 +172,33 @@ function guessMime(filePath) {
   return MIME_MAP[ext] || 'application/octet-stream';
 }
 
-module.exports = { listBuckets, listObjects, getObject, putObject, deleteObject, getPresignedUrl };
+/**
+ * Download an S3 object and write it to a local file path.
+ * Streams the response body directly to disk — safe for large video files.
+ */
+async function downloadFile({ bucket, key, destPath } = {}) {
+  const resolvedBucket = bucket || getAwsConfig().bucket;
+  try {
+    const client = getClient();
+    const response = await client.send(
+      new GetObjectCommand({ Bucket: resolvedBucket, Key: key })
+    );
+
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+    const writeStream = fs.createWriteStream(destPath);
+
+    await new Promise((resolve, reject) => {
+      response.Body.pipe(writeStream);
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+      response.Body.on('error', reject);
+    });
+
+    return { ok: true, destPath };
+  } catch (err) {
+    try { fs.unlinkSync(destPath); } catch {} // clean up partial file
+    return { ok: false, error: err.message };
+  }
+}
+
+module.exports = { listBuckets, listObjects, getObject, putObject, deleteObject, getPresignedUrl, downloadFile };

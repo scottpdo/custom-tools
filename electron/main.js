@@ -5,6 +5,7 @@ const Store = require('electron-store');
 
 const { getAwsConfig, saveAwsConfig, setStore } = require('./aws/config');
 const s3 = require('./aws/s3');
+const video = require('./tools/video');
 
 // Persistent local settings store
 const store = new Store({
@@ -126,4 +127,30 @@ ipcMain.handle('s3:getPresignedUrl', async (_event, { bucket, key, expiresIn }) 
 
 ipcMain.handle('s3:listBuckets', async () => {
   return s3.listBuckets();
+});
+
+// ─── IPC: Video ───────────────────────────────────────────────────────────────
+
+ipcMain.handle('video:listProjects', async (_event, opts) => {
+  return video.listProjects(opts);
+});
+
+ipcMain.handle('video:createProject', async (_event, opts) => {
+  return video.createProject(opts);
+});
+
+ipcMain.handle('video:listProjectFiles', async (_event, opts) => {
+  return video.listProjectFiles(opts);
+});
+
+ipcMain.handle('video:downloadClip', async (_event, opts) => {
+  return video.downloadClip(opts);
+});
+
+ipcMain.handle('video:openFileDialog', async () => {
+  return video.openFileDialog();
+});
+
+ipcMain.handle('video:uploadFiles', async (_event, opts) => {
+  return video.uploadFiles(opts);
 });

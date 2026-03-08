@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' file:;" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Custom Tools</title>
   <link rel="stylesheet" href="styles.css" />
@@ -27,14 +27,14 @@
         <button class="nav-item" data-tool="s3-browser">
           <span class="nav-icon">🗂</span> S3 Browser
         </button>
+        <button class="nav-item" data-tool="video-editor">
+          <span class="nav-icon">🎬</span> Video Editor
+        </button>
 
         <!-- Placeholder tools — swap out for real ones later -->
         <div class="nav-section-label">Coming Soon</div>
         <button class="nav-item disabled" disabled>
           <span class="nav-icon">📝</span> CMS
-        </button>
-        <button class="nav-item disabled" disabled>
-          <span class="nav-icon">🎬</span> Video Editor
         </button>
         <button class="nav-item disabled" disabled>
           <span class="nav-icon">🎵</span> Audio Editor
@@ -92,6 +92,84 @@
         </div>
       </section>
 
+      <!-- Video Editor panel -->
+      <section class="panel" id="panel-video-editor">
+
+        <!-- View: Project selection -->
+        <div id="ve-projects-view">
+          <div class="panel-header">
+            <h1>Video Editor</h1>
+            <div class="toolbar">
+              <input type="text" id="ve-new-project-input" placeholder="New project name…" />
+              <button id="ve-create-project-btn">Create Project</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="ve-projects-list">
+              <p class="muted">Loading projects…</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- View: Editor -->
+        <div id="ve-editor-view" class="ve-hidden">
+          <div class="panel-header">
+            <button id="ve-back-btn" class="ve-back-btn">← Projects</button>
+            <h1 id="ve-project-title">Project</h1>
+            <div class="toolbar">
+              <button id="ve-add-files-btn">+ Add Files</button>
+            </div>
+          </div>
+
+          <div class="ve-workspace">
+
+            <!-- Left: Player + Timeline -->
+            <div class="ve-player-col">
+
+              <div class="ve-player-wrap">
+                <video id="ve-video" preload="auto"></video>
+                <div id="ve-player-overlay" class="ve-overlay">
+                  <button id="ve-overlay-play" class="ve-big-play">▶</button>
+                </div>
+              </div>
+
+              <div class="ve-controls">
+                <button id="ve-ctrl-play" class="ve-ctrl-btn">▶</button>
+                <div class="ve-progress" id="ve-progress-bar">
+                  <div id="ve-progress-fill" class="ve-progress-fill"></div>
+                </div>
+                <span id="ve-time-display" class="ve-time">0:00 / 0:00</span>
+              </div>
+
+              <div class="ve-strip-header">
+                <span class="ve-section-label">Timeline</span>
+                <span class="muted ve-strip-hint">Drag clips from library · Drag to reorder</span>
+              </div>
+              <div id="ve-strip" class="ve-strip">
+                <div id="ve-strip-empty" class="ve-strip-empty">
+                  Drag clips from the library →
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Right: Library -->
+            <div class="ve-library-col">
+              <div class="ve-lib-header">
+                <span class="ve-section-label">Library</span>
+                <button id="ve-refresh-lib-btn" class="ve-icon-btn" title="Refresh">↻</button>
+              </div>
+              <div id="ve-drop-zone" class="ve-drop-zone">
+                <span>Drop video files here to upload</span>
+              </div>
+              <div id="ve-library-list" class="ve-library-list"></div>
+            </div>
+
+          </div><!-- .ve-workspace -->
+        </div><!-- #ve-editor-view -->
+
+      </section>
+
       <!-- Settings panel -->
       <section class="panel" id="panel-settings">
         <div class="panel-header"><h1>Settings</h1></div>
@@ -133,5 +211,6 @@
   </div>
 
   <script src="renderer.js"></script>
+  <script src="tools/video-editor.js"></script>
 </body>
 </html>

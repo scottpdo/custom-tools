@@ -31,4 +31,14 @@ contextBridge.exposeInMainWorld('api', {
     deleteObject: (opts) => invoke('s3:deleteObject', opts),
     getPresignedUrl: (opts) => invoke('s3:getPresignedUrl', opts),
   },
+
+  // ── Video ─────────────────────────────────────────────────────────────────
+  video: {
+    listProjects: (opts) => invoke('video:listProjects', opts),
+    createProject: (opts) => invoke('video:createProject', opts),
+    listProjectFiles: (opts) => invoke('video:listProjectFiles', opts),
+    downloadClip: (opts) => invoke('video:downloadClip', opts),
+    openFileDialog: () => invoke('video:openFileDialog'),
+    uploadFiles: (opts) => invoke('video:uploadFiles', opts),
+  },
 });

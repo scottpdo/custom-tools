@@ -1,0 +1,51 @@
+{
+  "name": "custom-tools",
+  "version": "0.1.0",
+  "description": "Electron app with AWS backend for custom tools (CMS, video/audio editing, etc.)",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": ["electron", "aws", "s3", "tools"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.750.0",
+    "@aws-sdk/client-sts": "^3.750.0",
+    "@aws-sdk/lib-storage": "^3.750.0",
+    "@aws-sdk/s3-request-presigner": "^3.750.0",
+    "dotenv": "^16.4.7",
+    "electron-store": "^8.2.0"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.custom-tools.app",
+    "productName": "Custom Tools",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility"
+    }
+  }
+}

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Custom Tools</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div id="sidebar-header">
+        <span class="app-logo">⚙</span>
+        <span class="app-name">Custom Tools</span>
+      </div>
+
+      <nav id="tool-nav">
+        <div class="nav-section-label">Tools</div>
+
+        <button class="nav-item active" data-tool="home">
+          <span class="nav-icon">🏠</span> Home
+        </button>
+        <button class="nav-item" data-tool="s3-browser">
+          <span class="nav-icon">🗂</span> S3 Browser
+        </button>
+
+        <!-- Placeholder tools — swap out for real ones later -->
+        <div class="nav-section-label">Coming Soon</div>
+        <button class="nav-item disabled" disabled>
+          <span class="nav-icon">📝</span> CMS
+        </button>
+        <button class="nav-item disabled" disabled>
+          <span class="nav-icon">🎬</span> Video Editor
+        </button>
+        <button class="nav-item disabled" disabled>
+          <span class="nav-icon">🎵</span> Audio Editor
+        </button>
+      </nav>
+
+      <div id="sidebar-footer">
+        <button class="nav-item" data-tool="settings">
+          <span class="nav-icon">⚙</span> Settings
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main id="content">
+
+      <!-- Home panel -->
+      <section class="panel active" id="panel-home">
+        <div class="panel-header">
+          <h1>Custom Tools</h1>
+          <div id="connection-badge" class="badge badge-unknown">Checking AWS…</div>
+        </div>
+        <div class="panel-body centered">
+          <p class="muted">Select a tool from the sidebar to get started.</p>
+          <p class="muted">Configure your AWS credentials in <strong>Settings</strong> first.</p>
+        </div>
+      </section>
+
+      <!-- S3 Browser panel -->
+      <section class="panel" id="panel-s3-browser">
+        <div class="panel-header">
+          <h1>S3 Browser</h1>
+          <div class="toolbar">
+            <select id="bucket-select">
+              <option value="">— select bucket —</option>
+            </select>
+            <input id="prefix-input" type="text" placeholder="prefix/" />
+            <button id="btn-list">List</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <table id="s3-table">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Size</th>
+                <th>Last Modified</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="s3-tbody">
+              <tr><td colspan="4" class="muted">No objects loaded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Settings panel -->
+      <section class="panel" id="panel-settings">
+        <div class="panel-header"><h1>Settings</h1></div>
+        <div class="panel-body">
+          <form id="settings-form">
+            <fieldset>
+              <legend>AWS Credentials</legend>
+              <label>
+                AWS Region
+                <input type="text" name="region" placeholder="us-east-1" />
+              </label>
+              <label>
+                Access Key ID
+                <input type="text" name="accessKeyId" placeholder="AKIA…" autocomplete="off" />
+              </label>
+              <label>
+                Secret Access Key
+                <input type="password" name="secretAccessKey" placeholder="leave blank to keep existing" autocomplete="off" />
+              </label>
+              <label>
+                AWS Profile <small>(alternative to keys)</small>
+                <input type="text" name="profile" placeholder="default" />
+              </label>
+              <label>
+                Default S3 Bucket
+                <input type="text" name="bucket" placeholder="my-bucket" />
+              </label>
+            </fieldset>
+            <div class="form-actions">
+              <button type="submit">Save</button>
+              <button type="button" id="btn-test-connection">Test Connection</button>
+            </div>
+            <div id="settings-status" class="status-message"></div>
+          </form>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

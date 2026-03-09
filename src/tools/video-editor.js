@@ -4,6 +4,10 @@
  * formatBytes function defined in renderer.js.
  */
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const DEFAULT_TRANSITION_DURATION = 1.0; // seconds
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const ve = {
@@ -292,6 +296,43 @@ function renderLibrary() {
   });
 }
 
+// ── Context menu ──────────────────────────────────────────────────────────────
+
+let activeContextMenu = null;
+
+function showContextMenu(e, items) {
+  closeContextMenu();
+  const menu = document.createElement('div');
+  menu.className = 've-context-menu';
+
+  items.forEach(({ label, action }) => {
+    const item = document.createElement('div');
+    item.className = 've-context-item';
+    item.textContent = label;
+    item.addEventListener('mousedown', (ev) => {
+      ev.stopPropagation();
+      closeContextMenu();
+      action();
+    });
+    menu.appendChild(item);
+  });
+
+  // Position so the menu stays within the viewport
+  document.body.appendChild(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = `${Math.min(e.clientX, window.innerWidth  - r.width  - 6)}px`;
+  menu.style.top  = `${Math.min(e.clientY, window.innerHeight - r.height - 6)}px`;
+
+  activeContextMenu = menu;
+}
+
+function closeContextMenu() {
+  if (activeContextMenu) { activeContextMenu.remove(); activeContextMenu = null; }
+}
+
+document.addEventListener('mousedown', closeContextMenu);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContextMenu(); });
+
 // ── Strip ─────────────────────────────────────────────────────────────────────
 
 function addToStrip(key) {
@@ -322,12 +363,20 @@ function renderStrip() {
 
   veStripEmpty.style.display = ve.strip.length === 0 ? 'flex' : 'none';
 
+  const n = ve.strip.length;
+
   ve.strip.forEach((clip, idx) => {
     const isPlaying = ve.player.isPlaying && ve.player.currentIdx === idx;
     const card = document.createElement('div');
     card.className = 've-clip-card' + (isPlaying ? ' ve-playing' : '');
     card.draggable = true;
     card.dataset.idx = idx;
+
+    // Transition handle markup
+    const hasFadeIn  = clip.transitions?.in?.type  === 'fade';
+    const hasFadeOut = clip.transitions?.out?.type === 'fade';
+    const fadeInDur  = clip.transitions?.in?.duration  ?? 0;
+    const fadeOutDur = clip.transitions?.out?.duration ?? 0;
 
     card.innerHTML = `
       <button class="ve-clip-remove" title="Remove">×</button>
@@ -341,16 +390,173 @@ function renderStrip() {
         ${isPlaying ? '<div class="ve-clip-playing-overlay">▶</div>' : ''}
       </div>
       <div class="ve-clip-name" title="${escHtml(clip.name)}">${escHtml(clip.name)}</div>
+      ${hasFadeIn  ? `<div class="ve-trans-handle ve-trans-left"  data-side="in"  title="Fade in: ${fadeInDur.toFixed(1)}s"><span>${fadeInDur.toFixed(1)}s</span></div>`  : ''}
+      ${hasFadeOut ? `<div class="ve-trans-handle ve-trans-right" data-side="out" title="Fade out: ${fadeOutDur.toFixed(1)}s"><span>${fadeOutDur.toFixed(1)}s</span></div>` : ''}
     `;
 
+    // ── Remove button ─────────────────────────────────────────────────────────
     card.querySelector('.ve-clip-remove').addEventListener('click', (e) => {
       e.stopPropagation();
+      // Clean up transitions referencing the removed clip's neighbours
+      if (idx > 0) delete ve.strip[idx - 1].transitions.out;
+      if (idx < ve.strip.length - 1) delete ve.strip[idx + 1].transitions.in;
       ve.strip.splice(idx, 1);
       if (ve.player.currentIdx >= ve.strip.length) ve.player.currentIdx = ve.strip.length - 1;
       renderStrip();
       markDirty();
     });
 
+    // ── Context menu (right-click) ────────────────────────────────────────────
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const prevClip = idx > 0 ? ve.strip[idx - 1] : null;
+      const nextClip = idx < n - 1 ? ve.strip[idx + 1] : null;
+      const items = [];
+
+      // ── Left side: fade-in (first clip) or transition before (others) ──────
+      if (idx === 0) {
+        const has = clip.transitions?.in?.type === 'fade';
+        items.push({
+          label: has ? 'Remove fade in' : 'Add fade in',
+          action: () => {
+            clip.transitions = clip.transitions || {};
+            if (has) { delete clip.transitions.in; }
+            else {
+              const maxDur = clip.duration > 0 ? clip.duration / 2 : DEFAULT_TRANSITION_DURATION;
+              clip.transitions.in = { type: 'fade', duration: Math.min(DEFAULT_TRANSITION_DURATION, maxDur) };
+            }
+            renderStrip(); markDirty();
+          },
+        });
+      } else {
+        const has = clip.transitions?.in?.type === 'fade';
+        items.push({
+          label: has ? 'Remove transition before' : 'Add transition before',
+          action: () => {
+            clip.transitions     = clip.transitions     || {};
+            prevClip.transitions = prevClip.transitions || {};
+            if (has) {
+              delete clip.transitions.in;
+              delete prevClip.transitions.out;
+            } else {
+              const maxDur = Math.min(
+                clip.duration     > 0 ? clip.duration     / 2 : DEFAULT_TRANSITION_DURATION,
+                prevClip.duration > 0 ? prevClip.duration / 2 : DEFAULT_TRANSITION_DURATION,
+              );
+              const dur = Math.max(0.1, Math.min(DEFAULT_TRANSITION_DURATION, maxDur));
+              clip.transitions.in      = { type: 'fade', duration: dur };
+              prevClip.transitions.out = { type: 'fade', duration: dur };
+            }
+            renderStrip(); markDirty();
+          },
+        });
+      }
+
+      // ── Right side: fade-out (last clip) or transition after (others) ──────
+      if (idx === n - 1) {
+        const has = clip.transitions?.out?.type === 'fade';
+        items.push({
+          label: has ? 'Remove fade out' : 'Add fade out',
+          action: () => {
+            clip.transitions = clip.transitions || {};
+            if (has) { delete clip.transitions.out; }
+            else {
+              const maxDur = clip.duration > 0 ? clip.duration / 2 : DEFAULT_TRANSITION_DURATION;
+              clip.transitions.out = { type: 'fade', duration: Math.min(DEFAULT_TRANSITION_DURATION, maxDur) };
+            }
+            renderStrip(); markDirty();
+          },
+        });
+      } else {
+        const has = clip.transitions?.out?.type === 'fade';
+        items.push({
+          label: has ? 'Remove transition after' : 'Add transition after',
+          action: () => {
+            clip.transitions     = clip.transitions     || {};
+            nextClip.transitions = nextClip.transitions || {};
+            if (has) {
+              delete clip.transitions.out;
+              delete nextClip.transitions.in;
+            } else {
+              const maxDur = Math.min(
+                clip.duration     > 0 ? clip.duration     / 2 : DEFAULT_TRANSITION_DURATION,
+                nextClip.duration > 0 ? nextClip.duration / 2 : DEFAULT_TRANSITION_DURATION,
+              );
+              const dur = Math.max(0.1, Math.min(DEFAULT_TRANSITION_DURATION, maxDur));
+              clip.transitions.out    = { type: 'fade', duration: dur };
+              nextClip.transitions.in = { type: 'fade', duration: dur };
+            }
+            renderStrip(); markDirty();
+          },
+        });
+      }
+
+      showContextMenu(e, items);
+    });
+
+    // ── Transition handle drag (up = longer, down = shorter) ──────────────────
+    card.querySelectorAll('.ve-trans-handle').forEach((handle) => {
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const side     = handle.dataset.side; // 'in' or 'out'
+        const startY   = e.clientY;
+        const startDur = side === 'in'
+          ? (clip.transitions.in?.duration  ?? DEFAULT_TRANSITION_DURATION)
+          : (clip.transitions.out?.duration ?? DEFAULT_TRANSITION_DURATION);
+
+        // Max: half of this clip AND half of the adjacent clip it blends with
+        const clipDur = clip.duration > 0 ? clip.duration : Infinity;
+        let maxDur = clipDur / 2;
+        if (side === 'in' && idx > 0) {
+          const prevDur = ve.strip[idx - 1].duration;
+          if (prevDur > 0) maxDur = Math.min(maxDur, prevDur / 2);
+        }
+        if (side === 'out' && idx < ve.strip.length - 1) {
+          const nextDur = ve.strip[idx + 1].duration;
+          if (nextDur > 0) maxDur = Math.min(maxDur, nextDur / 2);
+        }
+
+        const label = handle.querySelector('span');
+
+        const onMove = (ev) => {
+          const dy     = startY - ev.clientY; // positive = dragged up = longer
+          const newDur = Math.max(0.1, Math.min(maxDur, startDur + dy * 0.02));
+
+          if (side === 'in') {
+            clip.transitions.in.duration = newDur;
+            // Keep adjacent clip's out in sync for cross-fades
+            if (idx > 0 && ve.strip[idx - 1].transitions?.out?.type === 'fade') {
+              ve.strip[idx - 1].transitions.out.duration = newDur;
+            }
+          } else {
+            clip.transitions.out.duration = newDur;
+            if (idx < ve.strip.length - 1 && ve.strip[idx + 1].transitions?.in?.type === 'fade') {
+              ve.strip[idx + 1].transitions.in.duration = newDur;
+            }
+          }
+
+          // Update label in-place — avoid full re-render during drag
+          label.textContent = `${newDur.toFixed(1)}s`;
+          handle.title = `${side === 'in' ? 'Fade in' : 'Fade out'}: ${newDur.toFixed(1)}s`;
+        };
+
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup',   onUp);
+          renderStrip(); // refresh adjacent clip's handle label too
+          markDirty();
+        };
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup',   onUp);
+      });
+    });
+
+    // ── Drag-to-reorder ───────────────────────────────────────────────────────
     card.addEventListener('dragstart', (e) => {
       if (e.target.classList.contains('ve-clip-remove')) { e.preventDefault(); return; }
       ve.drag = { type: 'strip', index: idx };

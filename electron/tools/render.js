@@ -37,7 +37,11 @@ async function startRender({ clips, outputPath, settings }, onProgress) {
     fps:    settings?.frameRate          ?? 30,
   };
 
-  const totalSeconds = clips.reduce((s, c) => s + Math.max(0, c.trimOut - c.trimIn), 0);
+  // Total output duration: subtract xfade overlaps between consecutive clips
+  let totalSeconds = clips.reduce((s, c) => s + Math.max(0, c.trimOut - c.trimIn), 0);
+  for (let i = 0; i < clips.length - 1; i++) {
+    totalSeconds -= getTransitionDuration(clips[i].transitions?.out);
+  }
 
   return new Promise((resolve) => {
     const cmd = ffmpeg();
@@ -116,52 +120,128 @@ function cancelRender() {
  * Build a filter_complex string that:
  *  - Scales each clip to the target resolution (letterboxed)
  *  - Normalises frame rate
- *  - Applies per-clip fade-in / fade-out if specified in transitions
- *  - Concatenates all clips in order
+ *  - Applies standalone fade-in on the first clip and fade-out on the last clip
+ *  - Uses xfade/acrossfade for crossfade transitions between adjacent clips
+ *    (requires ffmpeg ≥ 4.3; future: could fall back to concat+fade for older versions)
+ *  - Concatenates "cut" segments (clip groups not connected by transitions) together
  */
 function buildFilterComplex(clips, { width, height, fps }) {
-  const filterParts = [];
-  const vOuts = [];
-  const aOuts = [];
+  const n = clips.length;
+  const fp = [];
 
-  clips.forEach((clip, i) => {
-    const clipDur  = clip.trimOut - clip.trimIn;
-    const fadeIn   = getTransitionDuration(clip.transitions?.in);
-    const fadeOut  = getTransitionDuration(clip.transitions?.out);
-
-    // Video filter chain ──────────────────────────────────────────────────────
-    const vChain = [
-      // Letterbox to target resolution, then pad with black to fill exactly
-      `scale=${width}:${height}:force_original_aspect_ratio=decrease`,
-      `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
-      'setsar=1',
-      `fps=${fps}`,
-    ];
-    if (fadeIn  > 0) vChain.push(`fade=t=in:st=0:d=${fadeIn.toFixed(3)}`);
-    if (fadeOut > 0) vChain.push(`fade=t=out:st=${Math.max(0, clipDur - fadeOut).toFixed(3)}:d=${fadeOut.toFixed(3)}`);
-
-    filterParts.push(`[${i}:v]${vChain.join(',')}[cv${i}]`);
-    vOuts.push(`[cv${i}]`);
-
-    // Audio filter chain ──────────────────────────────────────────────────────
-    const aChain = [];
-    if (fadeIn  > 0) aChain.push(`afade=t=in:st=0:d=${fadeIn.toFixed(3)}`);
-    if (fadeOut > 0) aChain.push(`afade=t=out:st=${Math.max(0, clipDur - fadeOut).toFixed(3)}:d=${fadeOut.toFixed(3)}`);
-
-    if (aChain.length > 0) {
-      filterParts.push(`[${i}:a]${aChain.join(',')}[ca${i}]`);
-    } else {
-      filterParts.push(`[${i}:a]anull[ca${i}]`);
-    }
-    aOuts.push(`[ca${i}]`);
+  // ── Step 1: Per-clip normalisation ────────────────────────────────────────
+  clips.forEach((_, i) => {
+    fp.push(
+      `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
+      `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}[nv${i}]`,
+    );
+    fp.push(`[${i}:a]anull[na${i}]`);
   });
 
-  // Concat all prepared streams — ffmpeg concat requires interleaved pairs: [v0][a0][v1][a1]...
-  const interleavedStreams = clips.map((_, i) => `[cv${i}][ca${i}]`).join('');
-  filterParts.push(`${interleavedStreams}concat=n=${clips.length}:v=1:a=1[outv][outa]`);
+  // ── Step 2: Standalone fade-in on first clip ───────────────────────────────
+  // clips[0].transitions.in → fade from black at the very start of the output.
+  const pv = clips.map((_, i) => `nv${i}`); // processed video label per clip
+  const pa = clips.map((_, i) => `na${i}`); // processed audio label per clip
+
+  const firstFadeIn = getTransitionDuration(clips[0].transitions?.in);
+  if (firstFadeIn > 0) {
+    fp.push(`[nv0]fade=t=in:st=0:d=${firstFadeIn.toFixed(3)}[fiv0]`);
+    fp.push(`[na0]afade=t=in:st=0:d=${firstFadeIn.toFixed(3)}[fia0]`);
+    pv[0] = 'fiv0';
+    pa[0] = 'fia0';
+  }
+
+  // ── Step 3: Standalone fade-out on last clip ───────────────────────────────
+  // clips[n-1].transitions.out → fade to black at the very end of the output.
+  // For n===1 this is the same clip as the fade-in above, so chain from pv[0].
+  const lastFadeOut = getTransitionDuration(clips[n - 1].transitions?.out);
+  if (lastFadeOut > 0) {
+    const lastDur = clips[n - 1].trimOut - clips[n - 1].trimIn;
+    const st = Math.max(0, lastDur - lastFadeOut);
+    const srcV = pv[n - 1]; // may already be 'fiv0' when n === 1
+    fp.push(`[${srcV}]fade=t=out:st=${st.toFixed(3)}:d=${lastFadeOut.toFixed(3)}[fov${n - 1}]`);
+    fp.push(`[${pa[n - 1]}]afade=t=out:st=${st.toFixed(3)}:d=${lastFadeOut.toFixed(3)}[foa${n - 1}]`);
+    pv[n - 1] = `fov${n - 1}`;
+    pa[n - 1] = `foa${n - 1}`;
+  }
+
+  // Single-clip shortcut ─────────────────────────────────────────────────────
+  if (n === 1) {
+    fp.push(`[${pv[0]}]null[outv]`);
+    fp.push(`[${pa[0]}]anull[outa]`);
+    return { filterComplex: fp.join(';'), vOut: '[outv]', aOut: '[outa]' };
+  }
+
+  // ── Step 4: Group clips into segments separated by hard cuts ──────────────
+  // transitionDurs[i] = crossfade duration between clip i and clip i+1.
+  // We use clips[i].transitions.out as the canonical value (the context menu
+  // always writes both clips[i].transitions.out and clips[i+1].transitions.in
+  // to the same duration).
+  const transitionDurs = clips.slice(0, n - 1).map((c) =>
+    getTransitionDuration(c.transitions?.out),
+  );
+
+  const segments = [[0]];
+  for (let i = 0; i < n - 1; i++) {
+    if (transitionDurs[i] > 0) {
+      segments[segments.length - 1].push(i + 1);
+    } else {
+      segments.push([i + 1]);
+    }
+  }
+
+  // ── Step 5: xfade chain within each segment ────────────────────────────────
+  const segVOut = [];
+  const segAOut = [];
+
+  segments.forEach((seg, si) => {
+    if (seg.length === 1) {
+      segVOut.push(pv[seg[0]]);
+      segAOut.push(pa[seg[0]]);
+      return;
+    }
+
+    let curV = pv[seg[0]];
+    let curA = pa[seg[0]];
+    // Accumulated output duration within this xfade chain (used for offset calc)
+    let accDur = clips[seg[0]].trimOut - clips[seg[0]].trimIn;
+
+    for (let j = 1; j < seg.length; j++) {
+      const ci     = seg[j];
+      const tDur   = transitionDurs[ci - 1];
+      const clipDur = clips[ci].trimOut - clips[ci].trimIn;
+      // xfade offset = point in the accumulated output where the blend starts
+      const offset = Math.max(0, accDur - tDur);
+
+      const xvLabel = `xv${si}_${j}`;
+      const xaLabel = `xa${si}_${j}`;
+
+      fp.push(
+        `[${curV}][${pv[ci]}]xfade=transition=fade:duration=${tDur.toFixed(3)}` +
+        `:offset=${offset.toFixed(3)}[${xvLabel}]`,
+      );
+      fp.push(`[${curA}][${pa[ci]}]acrossfade=d=${tDur.toFixed(3)}:c1=tri:c2=tri[${xaLabel}]`);
+
+      curV = xvLabel;
+      curA = xaLabel;
+      accDur = accDur + clipDur - tDur;
+    }
+
+    segVOut.push(curV);
+    segAOut.push(curA);
+  });
+
+  // ── Step 6: Concat segments (hard cuts between groups) ────────────────────
+  if (segments.length === 1) {
+    fp.push(`[${segVOut[0]}]null[outv]`);
+    fp.push(`[${segAOut[0]}]anull[outa]`);
+  } else {
+    const concatIn = segments.map((_, si) => `[${segVOut[si]}][${segAOut[si]}]`).join('');
+    fp.push(`${concatIn}concat=n=${segments.length}:v=1:a=1[outv][outa]`);
+  }
 
   return {
-    filterComplex: filterParts.join(';'),
+    filterComplex: fp.join(';'),
     vOut: '[outv]',
     aOut: '[outa]',
   };

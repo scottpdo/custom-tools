@@ -156,9 +156,9 @@ function buildFilterComplex(clips, { width, height, fps }) {
     aOuts.push(`[ca${i}]`);
   });
 
-  // Concat all prepared streams
-  const concatInputs = vOuts.join('') + aOuts.join('');
-  filterParts.push(`${concatInputs}concat=n=${clips.length}:v=1:a=1[outv][outa]`);
+  // Concat all prepared streams — ffmpeg concat requires interleaved pairs: [v0][a0][v1][a1]...
+  const interleavedStreams = clips.map((_, i) => `[cv${i}][ca${i}]`).join('');
+  filterParts.push(`${interleavedStreams}concat=n=${clips.length}:v=1:a=1[outv][outa]`);
 
   return {
     filterComplex: filterParts.join(';'),

@@ -42,5 +42,11 @@ contextBridge.exposeInMainWorld('api', {
     uploadFiles: (opts) => invoke('video:uploadFiles', opts),
     readProject: (opts) => invoke('video:readProject', opts),
     saveProject: (opts) => invoke('video:saveProject', opts),
+    showSaveDialog: (opts) => invoke('video:showSaveDialog', opts),
+    render: (opts) => invoke('video:render', opts),
+    cancelRender: () => invoke('video:cancelRender'),
+    // Push-style progress events from the main process during a render
+    onRenderProgress: (cb) => ipcRenderer.on('video:render-progress', (_e, data) => cb(data)),
+    offRenderProgress: () => ipcRenderer.removeAllListeners('video:render-progress'),
   },
 });

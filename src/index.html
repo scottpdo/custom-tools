@@ -119,6 +119,7 @@
             <div class="toolbar">
               <button id="ve-save-btn" class="ve-save-btn" disabled>Saved ✓</button>
               <button id="ve-add-files-btn">+ Add Files</button>
+              <button id="ve-export-btn">Export…</button>
             </div>
           </div>
 
@@ -150,6 +151,16 @@
                 <div id="ve-strip-empty" class="ve-strip-empty">
                   Drag clips from the library →
                 </div>
+              </div>
+
+              <!-- Render status panel (hidden until export is started) -->
+              <div id="ve-render-panel" class="ve-render-panel ve-hidden">
+                <span id="ve-render-label" class="ve-render-label">Rendering…</span>
+                <div class="ve-render-track">
+                  <div id="ve-render-fill" class="ve-render-fill"></div>
+                </div>
+                <span id="ve-render-pct" class="ve-render-pct">0%</span>
+                <button id="ve-cancel-render-btn" class="ve-cancel-btn">Cancel</button>
               </div>
 
             </div>

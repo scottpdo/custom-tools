@@ -1,11 +1,12 @@
 require('dotenv').config();
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 
 const { getAwsConfig, saveAwsConfig, setStore } = require('./aws/config');
 const s3 = require('./aws/s3');
 const video = require('./tools/video');
+const render = require('./tools/render');
 
 // Persistent local settings store
 const store = new Store({
@@ -161,4 +162,30 @@ ipcMain.handle('video:readProject', async (_event, opts) => {
 
 ipcMain.handle('video:saveProject', async (_event, opts) => {
   return video.saveProject(opts);
+});
+
+// ─── IPC: Render ──────────────────────────────────────────────────────────────
+
+ipcMain.handle('video:showSaveDialog', async (_event, { defaultName } = {}) => {
+  const result = await dialog.showSaveDialog({
+    title: 'Export Video',
+    defaultPath: `${defaultName || 'output'}.mp4`,
+    filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+  });
+  return result.canceled ? { ok: true, path: null } : { ok: true, path: result.filePath };
+});
+
+ipcMain.handle('video:render', async (event, opts) => {
+  try {
+    return await render.startRender(opts, (progress) => {
+      event.sender.send('video:render-progress', progress);
+    });
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('video:cancelRender', () => {
+  render.cancelRender();
+  return { ok: true };
 });

@@ -629,3 +629,108 @@ function escHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+// ── Export / Render ───────────────────────────────────────────────────────────
+
+const veRenderPanel   = document.getElementById('ve-render-panel');
+const veRenderLabel   = document.getElementById('ve-render-label');
+const veRenderFill    = document.getElementById('ve-render-fill');
+const veRenderPct     = document.getElementById('ve-render-pct');
+const veExportBtn     = document.getElementById('ve-export-btn');
+const veCancelRender  = document.getElementById('ve-cancel-render-btn');
+
+document.getElementById('ve-export-btn').addEventListener('click', startExport);
+document.getElementById('ve-cancel-render-btn').addEventListener('click', async () => {
+  await window.api.video.cancelRender();
+});
+
+async function startExport() {
+  if (ve.strip.length === 0) {
+    alert('Add some clips to the timeline before exporting.');
+    return;
+  }
+
+  const notReady = ve.strip.filter((c) => c.downloading || !c.localPath);
+  if (notReady.length > 0) {
+    alert(`${notReady.length} clip(s) are still downloading. Please wait and try again.`);
+    return;
+  }
+
+  // Ask where to save
+  const saveResult = await window.api.video.showSaveDialog({ defaultName: ve.project.name });
+  if (!saveResult.path) return; // user cancelled dialog
+
+  // Build serialisable clip descriptors for the main process
+  const clips = ve.strip.map((c) => ({
+    localPath:   c.localPath,
+    trimIn:      c.trimIn,
+    trimOut:     c.trimOut,
+    transitions: c.transitions,
+    duration:    c.duration,
+  }));
+
+  setRenderUI('rendering', 0);
+
+  // Listen for incremental progress pushed from the main process
+  window.api.video.onRenderProgress(({ pct, timemark }) => {
+    setRenderUI('rendering', pct, timemark);
+  });
+
+  const result = await window.api.video.render({
+    clips,
+    outputPath: saveResult.path,
+    settings:   ve.manifest?.settings,
+  });
+
+  window.api.video.offRenderProgress();
+
+  if (result.ok) {
+    setRenderUI('done', 100, null, saveResult.path);
+  } else if (result.cancelled) {
+    setRenderUI('idle');
+  } else {
+    setRenderUI('error', 0, null, result.error);
+  }
+}
+
+/**
+ * Update the render panel state.
+ * @param {'idle'|'rendering'|'done'|'error'} state
+ * @param {number} [pct]
+ * @param {string} [timemark]
+ * @param {string} [detail]  - output path on done, error message on error
+ */
+function setRenderUI(state, pct = 0, timemark, detail) {
+  const panel = veRenderPanel;
+
+  if (state === 'idle') {
+    panel.classList.add('ve-hidden');
+    panel.classList.remove('ve-render-done', 've-render-error');
+    veExportBtn.disabled = false;
+    return;
+  }
+
+  panel.classList.remove('ve-hidden', 've-render-done', 've-render-error');
+  veExportBtn.disabled = true;
+
+  if (state === 'rendering') {
+    veRenderLabel.textContent = timemark ? `Rendering… ${timemark}` : 'Rendering…';
+    veRenderFill.style.width  = `${pct}%`;
+    veRenderPct.textContent   = `${pct}%`;
+    veCancelRender.style.display = '';
+  } else if (state === 'done') {
+    panel.classList.add('ve-render-done');
+    veRenderLabel.textContent = `Exported → ${detail}`;
+    veRenderFill.style.width  = '100%';
+    veRenderPct.textContent   = '100%';
+    veCancelRender.style.display = 'none';
+    veExportBtn.disabled = false;
+  } else if (state === 'error') {
+    panel.classList.add('ve-render-error');
+    veRenderLabel.textContent = `Error: ${detail}`;
+    veRenderFill.style.width  = '0%';
+    veRenderPct.textContent   = '';
+    veCancelRender.style.display = 'none';
+    veExportBtn.disabled = false;
+  }
+}

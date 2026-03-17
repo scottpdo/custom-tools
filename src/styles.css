@@ -711,6 +711,79 @@ label input  { width: 360px; }
 }
 .ve-cancel-btn:hover { border-color: var(--color-error) !important; color: var(--color-error) !important; }
 
+/* ── S3 table row focus / image rows ─────────────────────────────────────── */
+#s3-table tr[tabindex]:focus { outline: none; background: var(--color-surface2); }
+#s3-table tr.s3-row-image    { cursor: default; }
+
+/* ── S3 image viewer overlay ─────────────────────────────────────────────── */
+.s3-img-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0, 0, 0, .88);
+  display: flex;
+  flex-direction: column;
+}
+
+.s3-img-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 1;
+  background: rgba(255,255,255,.12) !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  font-size: 20px;
+  line-height: 1;
+  color: #fff !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s;
+}
+.s3-img-close:hover { background: rgba(255,255,255,.25) !important; }
+
+.s3-img-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.s3-img-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+}
+.s3-img-wrap:active { cursor: grabbing; }
+
+.s3-img-el {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  user-select: none;
+  pointer-events: none; /* prevent drag interfering with pan */
+}
+
+.s3-img-hint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-muted);
+  padding: 6px 0 8px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
 /* ── Scrollbars ──────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar              { width: 6px; }
 ::-webkit-scrollbar-track        { background: transparent; }

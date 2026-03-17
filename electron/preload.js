@@ -30,6 +30,9 @@ contextBridge.exposeInMainWorld('api', {
     putObject: (opts) => invoke('s3:putObject', opts),
     deleteObject: (opts) => invoke('s3:deleteObject', opts),
     getPresignedUrl: (opts) => invoke('s3:getPresignedUrl', opts),
+    downloadFiles: (opts) => invoke('s3:downloadFiles', opts),
+    showDirectoryDialog: () => invoke('s3:showDirectoryDialog'),
+    showUploadDialog: () => invoke('s3:showUploadDialog'),
   },
 
   // ── Video ─────────────────────────────────────────────────────────────────

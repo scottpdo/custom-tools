@@ -84,9 +84,66 @@ document.getElementById('btn-test-connection').addEventListener('click', async (
 const bucketSelect = document.getElementById('bucket-select');
 const prefixInput  = document.getElementById('prefix-input');
 const s3Tbody      = document.getElementById('s3-tbody');
+const s3PanelBody  = document.getElementById('s3-panel-body');
+const btnBack      = document.getElementById('btn-s3-back');
+const btnFwd       = document.getElementById('btn-s3-fwd');
+const btnUp        = document.getElementById('btn-s3-up');
+const btnDlSel     = document.getElementById('btn-download-selected');
+const selectAll    = document.getElementById('s3-select-all');
 
 const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','svg','bmp','ico','avif','tiff','tif']);
 const isImageKey = (key) => IMAGE_EXTS.has(key.split('.').pop().toLowerCase());
+
+// ── Navigation history ─────────────────────────────────────────────────────
+
+let s3History = [];
+let s3HistIdx = -1;
+
+function s3PushHistory(bucket, prefix) {
+  const cur = s3History[s3HistIdx];
+  if (cur && cur.bucket === bucket && cur.prefix === prefix) return;
+  s3History.splice(s3HistIdx + 1);
+  s3History.push({ bucket, prefix });
+  s3HistIdx = s3History.length - 1;
+  s3UpdateNavBtns();
+}
+
+function s3UpdateNavBtns() {
+  btnBack.disabled = s3HistIdx <= 0;
+  btnFwd.disabled  = s3HistIdx >= s3History.length - 1;
+  btnUp.disabled   = !prefixInput.value;
+}
+
+btnBack.addEventListener('click', () => {
+  if (s3HistIdx <= 0) return;
+  s3HistIdx--;
+  const { bucket, prefix } = s3History[s3HistIdx];
+  bucketSelect.value = bucket;
+  prefixInput.value  = prefix;
+  s3UpdateNavBtns();
+  _doListObjects(bucket, prefix);
+});
+
+btnFwd.addEventListener('click', () => {
+  if (s3HistIdx >= s3History.length - 1) return;
+  s3HistIdx++;
+  const { bucket, prefix } = s3History[s3HistIdx];
+  bucketSelect.value = bucket;
+  prefixInput.value  = prefix;
+  s3UpdateNavBtns();
+  _doListObjects(bucket, prefix);
+});
+
+btnUp.addEventListener('click', () => {
+  const prefix = prefixInput.value;
+  if (!prefix) return;
+  const trimmed = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
+  const lastSlash = trimmed.lastIndexOf('/');
+  prefixInput.value = lastSlash >= 0 ? trimmed.slice(0, lastSlash + 1) : '';
+  listObjects();
+});
+
+// ── Buckets ────────────────────────────────────────────────────────────────
 
 async function loadBuckets() {
   const result = await window.api.s3.listBuckets();
@@ -98,59 +155,68 @@ async function loadBuckets() {
     opt.textContent = b.name;
     bucketSelect.appendChild(opt);
   });
-
-  // Pre-select the configured default bucket if present
   const cfg = await window.api.aws.getConfig();
   if (cfg.bucket) bucketSelect.value = cfg.bucket;
 }
 
-document.getElementById('btn-list').addEventListener('click', listObjects);
-bucketSelect.addEventListener('change', listObjects);
+document.getElementById('btn-list').addEventListener('click', () => listObjects());
+bucketSelect.addEventListener('change', () => listObjects());
 
-async function listObjects() {
+// ── Listing ────────────────────────────────────────────────────────────────
+
+async function listObjects(push = true) {
   const bucket = bucketSelect.value;
+  const prefix = prefixInput.value;
+  if (push) s3PushHistory(bucket, prefix);
+  await _doListObjects(bucket, prefix);
+}
+
+async function _doListObjects(bucket, prefix) {
   if (!bucket) {
-    s3Tbody.innerHTML = '<tr><td colspan="4" class="muted">Select a bucket first.</td></tr>';
+    s3Tbody.innerHTML = '<tr><td colspan="5" class="muted">Select a bucket first.</td></tr>';
+    selectAll.checked = false;
+    updateDownloadSelectedBtn();
     return;
   }
-  s3Tbody.innerHTML = '<tr><td colspan="4" class="muted">Loading…</td></tr>';
+  s3Tbody.innerHTML = '<tr><td colspan="5" class="muted">Loading…</td></tr>';
 
-  const result = await window.api.s3.listObjects({ bucket, prefix: prefixInput.value });
+  const result = await window.api.s3.listObjects({ bucket, prefix });
   if (!result.ok) {
-    s3Tbody.innerHTML = `<tr><td colspan="4" class="muted">Error: ${result.error}</td></tr>`;
+    s3Tbody.innerHTML = `<tr><td colspan="5" class="muted">Error: ${result.error}</td></tr>`;
     return;
   }
 
   if (result.objects.length === 0 && result.prefixes.length === 0) {
-    s3Tbody.innerHTML = '<tr><td colspan="4" class="muted">Empty.</td></tr>';
+    s3Tbody.innerHTML = '<tr><td colspan="5" class="muted">Empty.</td></tr>';
     return;
   }
 
   const rows = [];
 
-  // Render "folders" (common prefixes)
-  result.prefixes.forEach((prefix) => {
+  // Folders (common prefixes)
+  result.prefixes.forEach((pfx) => {
     rows.push(`
       <tr tabindex="0">
-        <td>
-          <button class="link-btn" data-prefix="${prefix}">📁 ${prefix}</button>
-        </td>
+        <td></td>
+        <td><button class="link-btn" data-prefix="${pfx}">📁 ${pfx}</button></td>
         <td>—</td><td>—</td><td></td>
       </tr>
     `);
   });
 
-  // Render objects
+  // Files
   result.objects.forEach((obj) => {
     const img = isImageKey(obj.key);
     rows.push(`
       <tr tabindex="0"${img ? ` data-image-key="${obj.key}" data-bucket="${bucket}" class="s3-row-image"` : ''}>
+        <td><input type="checkbox" class="s3-row-check" data-key="${obj.key}" /></td>
         <td title="${obj.key}">${img ? '🖼 ' : ''}${obj.key}</td>
         <td>${formatBytes(obj.size)}</td>
         <td>${new Date(obj.lastModified).toLocaleString()}</td>
         <td>
-          ${img ? `<button class="link-btn" data-action="open-image" data-bucket="${bucket}" data-key="${obj.key}">Open</button>` : ''}
-          <button class="link-btn" data-action="presign" data-bucket="${bucket}" data-key="${obj.key}">Link</button>
+          ${img ? `<button class="link-btn" data-action="open-image" data-bucket="${bucket}" data-key="${obj.key}">Open</button> ` : ''}
+          <button class="link-btn" data-action="download" data-bucket="${bucket}" data-key="${obj.key}">Download</button>
+          <button class="link-btn" data-action="presign"  data-bucket="${bucket}" data-key="${obj.key}">Link</button>
           <button class="link-btn danger" data-action="delete" data-bucket="${bucket}" data-key="${obj.key}">Delete</button>
         </td>
       </tr>
@@ -158,6 +224,8 @@ async function listObjects() {
   });
 
   s3Tbody.innerHTML = rows.join('');
+  selectAll.checked = false;
+  updateDownloadSelectedBtn();
 
   // Folder navigation
   s3Tbody.querySelectorAll('[data-prefix]').forEach((btn) => {
@@ -167,17 +235,108 @@ async function listObjects() {
     });
   });
 
-  // Actions
+  // Row actions
   s3Tbody.querySelectorAll('[data-action]').forEach((btn) => {
     btn.addEventListener('click', () => handleS3Action(btn));
   });
+
+  // Checkbox events
+  s3Tbody.querySelectorAll('.s3-row-check').forEach((cb) => {
+    cb.addEventListener('change', onRowCheckChange);
+  });
 }
 
-// Keyboard navigation within the table
+// ── Selection ──────────────────────────────────────────────────────────────
+
+function updateDownloadSelectedBtn() {
+  const checked = s3Tbody.querySelectorAll('.s3-row-check:checked');
+  btnDlSel.disabled = checked.length === 0;
+}
+
+function onRowCheckChange() {
+  const all     = s3Tbody.querySelectorAll('.s3-row-check');
+  const checked = s3Tbody.querySelectorAll('.s3-row-check:checked');
+  selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+  selectAll.checked       = all.length > 0 && checked.length === all.length;
+  updateDownloadSelectedBtn();
+}
+
+selectAll.addEventListener('change', () => {
+  s3Tbody.querySelectorAll('.s3-row-check').forEach((cb) => {
+    cb.checked = selectAll.checked;
+  });
+  updateDownloadSelectedBtn();
+});
+
+// ── Downloads ──────────────────────────────────────────────────────────────
+
+async function downloadKeys(bucket, keys) {
+  if (!keys.length) return;
+  const dirResult = await window.api.s3.showDirectoryDialog();
+  if (!dirResult.ok || !dirResult.path) return;
+  const result = await window.api.s3.downloadFiles({ bucket, keys, destDir: dirResult.path });
+  if (!result.ok) alert(`Download failed: ${result.error}`);
+}
+
+btnDlSel.addEventListener('click', async () => {
+  const bucket  = bucketSelect.value;
+  const checked = Array.from(s3Tbody.querySelectorAll('.s3-row-check:checked'));
+  await downloadKeys(bucket, checked.map((cb) => cb.dataset.key));
+});
+
+// ── Uploads ────────────────────────────────────────────────────────────────
+
+async function uploadFilePaths(filePaths) {
+  const bucket = bucketSelect.value;
+  const prefix = prefixInput.value;
+  if (!bucket) { alert('Select a bucket first.'); return; }
+  if (!filePaths.length) return;
+
+  s3Tbody.innerHTML = `<tr><td colspan="5" class="muted">Uploading ${filePaths.length} file(s)…</td></tr>`;
+  await Promise.all(
+    filePaths.map((filePath) => {
+      const fileName = filePath.replace(/\\/g, '/').split('/').pop();
+      return window.api.s3.putObject({ bucket, key: prefix + fileName, filePath });
+    })
+  );
+  listObjects(false);
+}
+
+document.getElementById('btn-upload-files').addEventListener('click', async () => {
+  const result = await window.api.s3.showUploadDialog();
+  if (result.ok && result.paths.length) await uploadFilePaths(result.paths);
+});
+
+// ── Drag-in upload ─────────────────────────────────────────────────────────
+
+s3PanelBody.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if ([...e.dataTransfer.types].includes('Files')) {
+    s3PanelBody.classList.add('s3-drag-active');
+  }
+});
+
+s3PanelBody.addEventListener('dragleave', (e) => {
+  if (!s3PanelBody.contains(e.relatedTarget)) {
+    s3PanelBody.classList.remove('s3-drag-active');
+  }
+});
+
+s3PanelBody.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  s3PanelBody.classList.remove('s3-drag-active');
+  // Electron extends File with a `path` property for OS-dragged files
+  const filePaths = Array.from(e.dataTransfer.files).map((f) => f.path).filter(Boolean);
+  await uploadFilePaths(filePaths);
+});
+
+// ── Keyboard navigation ────────────────────────────────────────────────────
+
 s3Tbody.addEventListener('keydown', (e) => {
   const row = e.target.closest('tr[tabindex]');
   if (!row) return;
-
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault();
     const rows = Array.from(s3Tbody.querySelectorAll('tr[tabindex="0"]'));
@@ -189,10 +348,14 @@ s3Tbody.addEventListener('keydown', (e) => {
   }
 });
 
+// ── Actions ────────────────────────────────────────────────────────────────
+
 async function handleS3Action(btn) {
   const { action, bucket, key } = btn.dataset;
   if (action === 'open-image') {
     openImageViewer(bucket, key);
+  } else if (action === 'download') {
+    await downloadKeys(bucket, [key]);
   } else if (action === 'presign') {
     const result = await window.api.s3.getPresignedUrl({ bucket, key, expiresIn: 3600 });
     if (result.ok) {
@@ -203,7 +366,7 @@ async function handleS3Action(btn) {
   } else if (action === 'delete') {
     if (!confirm(`Delete "${key}"?`)) return;
     const result = await window.api.s3.deleteObject({ bucket, key });
-    if (result.ok) listObjects();
+    if (result.ok) listObjects(false);
   }
 }
 

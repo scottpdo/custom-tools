@@ -67,18 +67,27 @@
       <section class="panel" id="panel-s3-browser">
         <div class="panel-header">
           <h1>S3 Browser</h1>
+          <div class="s3-nav-btns">
+            <button id="btn-s3-back" class="s3-nav-btn" title="Back" disabled>‹</button>
+            <button id="btn-s3-fwd"  class="s3-nav-btn" title="Forward" disabled>›</button>
+            <button id="btn-s3-up"   class="s3-nav-btn" title="Up one folder" disabled>↑</button>
+          </div>
           <div class="toolbar">
             <select id="bucket-select">
               <option value="">— select bucket —</option>
             </select>
             <input id="prefix-input" type="text" placeholder="prefix/" />
             <button id="btn-list">List</button>
+            <button id="btn-upload-files">Upload</button>
+            <button id="btn-download-selected" disabled>Download Selected</button>
           </div>
         </div>
-        <div class="panel-body">
+        <div class="panel-body s3-panel-body" id="s3-panel-body">
+          <div class="s3-drop-overlay" id="s3-drop-overlay">Drop files to upload</div>
           <table id="s3-table">
             <thead>
               <tr>
+                <th class="s3-col-check"><input type="checkbox" id="s3-select-all" title="Select all" /></th>
                 <th>Key</th>
                 <th>Size</th>
                 <th>Last Modified</th>
@@ -86,7 +95,7 @@
               </tr>
             </thead>
             <tbody id="s3-tbody">
-              <tr><td colspan="4" class="muted">No objects loaded.</td></tr>
+              <tr><td colspan="5" class="muted">No objects loaded.</td></tr>
             </tbody>
           </table>
         </div>

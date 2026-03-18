@@ -3,10 +3,18 @@ import { resolve } from 'path';
 
 export default defineConfig({
   main: {
-    entry: { index: resolve('electron/main.ts') },
+    build: {
+      rollupOptions: {
+        input: { index: resolve('electron/main.ts') },
+      },
+    },
   },
   preload: {
-    entry: { index: resolve('electron/preload.ts') },
+    build: {
+      rollupOptions: {
+        input: { index: resolve('electron/preload.ts') },
+      },
+    },
   },
   renderer: {
     root: resolve('src'),

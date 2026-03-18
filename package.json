@@ -2,13 +2,14 @@
   "name": "custom-tools",
   "version": "0.1.0",
   "description": "Electron app with AWS backend for custom tools (CMS, video/audio editing, etc.)",
-  "main": "electron/main.js",
+  "main": "out/main/index.js",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:win": "npm run build && electron-builder --win",
+    "build:linux": "npm run build && electron-builder --linux"
   },
   "keywords": ["electron", "aws", "s3", "tools"],
   "author": "",
@@ -23,8 +24,12 @@
     "fluent-ffmpeg": "^2.1.3"
   },
   "devDependencies": {
+    "@types/fluent-ffmpeg": "^2.1.27",
+    "@types/node": "^22.0.0",
     "electron": "^34.0.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.7.0"
   },
   "build": {
     "appId": "com.custom-tools.app",
@@ -33,8 +38,7 @@
       "output": "dist"
     },
     "files": [
-      "electron/**/*",
-      "src/**/*",
+      "out/**/*",
       "package.json"
     ],
     "mac": {

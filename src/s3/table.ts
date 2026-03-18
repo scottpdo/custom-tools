@@ -1,6 +1,7 @@
 import { formatBytes } from '../utils/format';
-import { isImageKey } from './constants';
+import { isImageKey, isVideoKey, isAudioKey } from './constants';
 import { openImageViewer } from './image-viewer';
+import { openMediaViewer } from './media-viewer';
 import { downloadKeys } from './download';
 import type { S3Object } from '../types/models';
 
@@ -9,6 +10,17 @@ interface TableCallbacks {
   onDelete: (bucket: string, key: string) => void;
   onSelectionChange: () => void;
 }
+
+type MediaType = 'image' | 'video' | 'audio' | null;
+
+function mediaType(key: string): MediaType {
+  if (isImageKey(key)) return 'image';
+  if (isVideoKey(key)) return 'video';
+  if (isAudioKey(key)) return 'audio';
+  return null;
+}
+
+const ICON: Record<string, string> = { image: '🖼 ', video: '🎬 ', audio: '🎵 ' };
 
 export function renderTable(
   tbody: HTMLTableSectionElement,
@@ -31,16 +43,18 @@ export function renderTable(
   });
 
   objects.forEach((obj) => {
-    const img = isImageKey(obj.key);
+    const mt    = mediaType(obj.key);
     const label = obj.key.split('/').filter(Boolean).at(-1) ?? obj.key;
+    const icon  = mt ? ICON[mt] : '';
+    const previewable = mt !== null;
     rows.push(`
-      <tr tabindex="0"${img ? ` data-image-key="${obj.key}" data-bucket="${bucket}" class="s3-row-image"` : ''}>
+      <tr tabindex="0"${previewable ? ` data-preview-key="${obj.key}" data-preview-type="${mt}" data-bucket="${bucket}"` : ''}>
         <td><input type="checkbox" class="s3-row-check" data-key="${obj.key}" /></td>
-        <td title="${obj.key}">${img ? '🖼 ' : ''}${label}</td>
+        <td title="${obj.key}">${icon}${label}</td>
         <td>${formatBytes(obj.size)}</td>
         <td>${new Date(obj.lastModified).toLocaleString()}</td>
         <td>
-          ${img ? `<button class="link-btn" data-action="open-image" data-bucket="${bucket}" data-key="${obj.key}">Open</button> ` : ''}
+          ${previewable ? `<button class="link-btn" data-action="preview" data-bucket="${bucket}" data-key="${obj.key}" data-media-type="${mt}">Preview</button> ` : ''}
           <button class="link-btn" data-action="download" data-bucket="${bucket}" data-key="${obj.key}">Download</button>
           <button class="link-btn" data-action="presign"  data-bucket="${bucket}" data-key="${obj.key}">Link</button>
           <button class="link-btn danger" data-action="delete" data-bucket="${bucket}" data-key="${obj.key}">Delete</button>
@@ -66,7 +80,7 @@ export function renderTable(
     cb.addEventListener('change', callbacks.onSelectionChange);
   });
 
-  // Keyboard nav
+  // Keyboard nav + Enter to preview
   tbody.addEventListener('keydown', (e) => {
     const row = (e.target as Element).closest<HTMLTableRowElement>('tr[tabindex]');
     if (!row) return;
@@ -75,18 +89,25 @@ export function renderTable(
       const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr[tabindex="0"]'));
       const i = rows.indexOf(row);
       rows[e.key === 'ArrowDown' ? i + 1 : i - 1]?.focus();
-    } else if ((e.key === 'Enter' || e.key === ' ') && row.dataset.imageKey) {
+    } else if ((e.key === 'Enter' || e.key === ' ') && row.dataset.previewKey) {
       e.preventDefault();
-      openImageViewer(row.dataset.bucket!, row.dataset.imageKey!);
+      openPreview(row.dataset.bucket!, row.dataset.previewKey!, row.dataset.previewType as MediaType);
     }
   });
 }
 
-async function handleAction(btn: HTMLButtonElement, callbacks: TableCallbacks): Promise<void> {
-  const { action, bucket, key } = btn.dataset as { action: string; bucket: string; key: string };
+function openPreview(bucket: string, key: string, mt: MediaType): void {
+  if (mt === 'image') openImageViewer(bucket, key);
+  else if (mt === 'video' || mt === 'audio') openMediaViewer(bucket, key, mt);
+}
 
-  if (action === 'open-image') {
-    openImageViewer(bucket, key);
+async function handleAction(btn: HTMLButtonElement, callbacks: TableCallbacks): Promise<void> {
+  const { action, bucket, key, mediaType: mt } = btn.dataset as {
+    action: string; bucket: string; key: string; mediaType: MediaType;
+  };
+
+  if (action === 'preview') {
+    openPreview(bucket, key, mt);
   } else if (action === 'download') {
     await downloadKeys(bucket, [key]);
   } else if (action === 'presign') {

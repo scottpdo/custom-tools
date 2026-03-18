@@ -76,19 +76,19 @@
             <select id="bucket-select">
               <option value="">— select bucket —</option>
             </select>
-            <input id="prefix-input" type="text" placeholder="prefix/" />
             <button id="btn-list">List</button>
             <button id="btn-upload-files">Upload</button>
             <button id="btn-download-selected" disabled>Download Selected</button>
           </div>
         </div>
+        <div id="s3-breadcrumbs" class="s3-breadcrumbs"></div>
         <div class="panel-body s3-panel-body" id="s3-panel-body">
           <div class="s3-drop-overlay" id="s3-drop-overlay">Drop files to upload</div>
           <table id="s3-table">
             <thead>
               <tr>
                 <th class="s3-col-check"><input type="checkbox" id="s3-select-all" title="Select all" /></th>
-                <th>Key</th>
+                <th>Name</th>
                 <th>Size</th>
                 <th>Last Modified</th>
                 <th>Actions</th>

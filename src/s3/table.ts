@@ -20,10 +20,11 @@ export function renderTable(
   const rows: string[] = [];
 
   prefixes.forEach((pfx) => {
+    const label = pfx.replace(/\/$/, '').split('/').filter(Boolean).at(-1) ?? pfx;
     rows.push(`
       <tr tabindex="0">
         <td></td>
-        <td><button class="link-btn" data-prefix="${pfx}">📁 ${pfx}</button></td>
+        <td><button class="link-btn" data-prefix="${pfx}" title="${pfx}">📁 ${label}</button></td>
         <td>—</td><td>—</td><td></td>
       </tr>
     `);
@@ -31,10 +32,11 @@ export function renderTable(
 
   objects.forEach((obj) => {
     const img = isImageKey(obj.key);
+    const label = obj.key.split('/').filter(Boolean).at(-1) ?? obj.key;
     rows.push(`
       <tr tabindex="0"${img ? ` data-image-key="${obj.key}" data-bucket="${bucket}" class="s3-row-image"` : ''}>
         <td><input type="checkbox" class="s3-row-check" data-key="${obj.key}" /></td>
-        <td title="${obj.key}">${img ? '🖼 ' : ''}${obj.key}</td>
+        <td title="${obj.key}">${img ? '🖼 ' : ''}${label}</td>
         <td>${formatBytes(obj.size)}</td>
         <td>${new Date(obj.lastModified).toLocaleString()}</td>
         <td>

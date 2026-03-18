@@ -4,16 +4,52 @@ import { renderTable } from './table';
 import { downloadKeys } from './download';
 import { uploadFilePaths, initDragUpload } from './upload';
 
-const bucketSelect = el<HTMLSelectElement>('bucket-select');
-const prefixInput  = el<HTMLInputElement>('prefix-input');
-const s3Tbody      = el<HTMLTableSectionElement>('s3-tbody');
-const s3PanelBody  = el('s3-panel-body');
-const btnDlSel     = el<HTMLButtonElement>('btn-download-selected');
-const selectAll    = el<HTMLInputElement>('s3-select-all');
+const bucketSelect  = el<HTMLSelectElement>('bucket-select');
+const breadcrumbs   = el('s3-breadcrumbs');
+const s3Tbody       = el<HTMLTableSectionElement>('s3-tbody');
+const s3PanelBody   = el('s3-panel-body');
+const btnDlSel      = el<HTMLButtonElement>('btn-download-selected');
+const selectAll     = el<HTMLInputElement>('s3-select-all');
 
-// ── Internal listing ───────────────────────────────────────────────────────────
+let currentPrefix = '';
+
+// ── Breadcrumbs ────────────────────────────────────────────────────────────────
+
+function updateBreadcrumbs(bucket: string, prefix: string): void {
+  if (!bucket) {
+    breadcrumbs.innerHTML = '';
+    return;
+  }
+
+  const parts: { label: string; prefix: string }[] = [{ label: bucket, prefix: '' }];
+  const segments = prefix.split('/').filter(Boolean);
+  segments.forEach((seg, i) => {
+    parts.push({ label: seg, prefix: segments.slice(0, i + 1).join('/') + '/' });
+  });
+
+  breadcrumbs.innerHTML = parts
+    .map((p, i) => {
+      const isLast = i === parts.length - 1;
+      const seg = isLast
+        ? `<span class="s3-crumb s3-crumb-current">${p.label}</span>`
+        : `<button class="s3-crumb s3-crumb-link" data-prefix="${p.prefix}">${p.label}</button>`;
+      return i === 0 ? seg : `<span class="s3-crumb-sep">/</span>${seg}`;
+    })
+    .join('');
+
+  breadcrumbs.querySelectorAll<HTMLButtonElement>('[data-prefix]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      currentPrefix = btn.dataset.prefix!;
+      listObjects();
+    });
+  });
+}
+
+// ── Internal listing ────────────────────────────────────────────────────────────
 
 async function doList(bucket: string, prefix: string): Promise<void> {
+  updateBreadcrumbs(bucket, prefix);
+
   if (!bucket) {
     s3Tbody.innerHTML = '<tr><td colspan="5" class="muted">Select a bucket first.</td></tr>';
     selectAll.checked = false;
@@ -35,7 +71,7 @@ async function doList(bucket: string, prefix: string): Promise<void> {
 
   renderTable(s3Tbody, bucket, result.prefixes, result.objects, {
     onFolderClick: (prefix) => {
-      prefixInput.value = prefix;
+      currentPrefix = prefix;
       listObjects();
     },
     onDelete: () => listObjects(false),
@@ -50,9 +86,8 @@ async function doList(bucket: string, prefix: string): Promise<void> {
 
 export async function listObjects(push = true): Promise<void> {
   const bucket = bucketSelect.value;
-  const prefix = prefixInput.value;
-  if (push) s3PushHistory(bucket, prefix);
-  await doList(bucket, prefix);
+  if (push) s3PushHistory(bucket, currentPrefix);
+  await doList(bucket, currentPrefix);
 }
 
 export async function loadBuckets(): Promise<void> {
@@ -90,25 +125,28 @@ function onRowCheckChange(): void {
 export function initS3Browser(): void {
   // Toolbar buttons
   el('btn-list').addEventListener('click', () => listObjects());
-  bucketSelect.addEventListener('change', () => listObjects());
+  bucketSelect.addEventListener('change', () => {
+    currentPrefix = '';
+    listObjects();
+  });
 
   // Nav buttons
   el('btn-s3-back').addEventListener('click', () => {
     const entry = s3NavBack();
     if (!entry) return;
     bucketSelect.value = entry.bucket;
-    prefixInput.value  = entry.prefix;
+    currentPrefix = entry.prefix;
     doList(entry.bucket, entry.prefix);
   });
   el('btn-s3-fwd').addEventListener('click', () => {
     const entry = s3NavFwd();
     if (!entry) return;
     bucketSelect.value = entry.bucket;
-    prefixInput.value  = entry.prefix;
+    currentPrefix = entry.prefix;
     doList(entry.bucket, entry.prefix);
   });
   el('btn-s3-up').addEventListener('click', () => {
-    prefixInput.value = s3NavUp(prefixInput.value);
+    currentPrefix = s3NavUp(currentPrefix);
     listObjects();
   });
 
@@ -130,7 +168,7 @@ export function initS3Browser(): void {
   el('btn-upload-files').addEventListener('click', async () => {
     const result = await window.api.s3.showUploadDialog();
     if (result.ok && result.paths.length) {
-      await uploadFilePaths(result.paths, bucketSelect.value, prefixInput.value, () => listObjects(false));
+      await uploadFilePaths(result.paths, bucketSelect.value, currentPrefix, () => listObjects(false));
     }
   });
 
@@ -138,7 +176,7 @@ export function initS3Browser(): void {
   initDragUpload(
     s3PanelBody,
     () => bucketSelect.value,
-    () => prefixInput.value,
+    () => currentPrefix,
     () => listObjects(false),
   );
 }

@@ -715,8 +715,8 @@ label input  { width: 360px; }
 #s3-table tr[tabindex]:focus { outline: none; background: var(--color-surface2); }
 #s3-table tr.s3-row-image    { cursor: default; }
 
-/* ── S3 image viewer overlay ─────────────────────────────────────────────── */
-.s3-img-overlay {
+/* ── S3 unified preview viewer ───────────────────────────────────────────── */
+.s3-preview-overlay {
   position: fixed;
   inset: 0;
   z-index: 3000;
@@ -725,142 +725,119 @@ label input  { width: 360px; }
   flex-direction: column;
 }
 
-.s3-img-close {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  z-index: 1;
+.s3-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  flex-shrink: 0;
+}
+
+.s3-preview-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s3-preview-counter {
+  font-size: 12px;
+  color: rgba(255,255,255,.5);
+  flex-shrink: 0;
+}
+
+.s3-preview-close {
   background: rgba(255,255,255,.12) !important;
   border: none !important;
   border-radius: 50% !important;
-  width: 36px !important;
-  height: 36px !important;
+  width: 32px !important;
+  height: 32px !important;
   padding: 0 !important;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   color: #fff !important;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   transition: background .15s;
 }
-.s3-img-close:hover { background: rgba(255,255,255,.25) !important; }
+.s3-preview-close:hover { background: rgba(255,255,255,.25) !important; }
 
-.s3-img-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-muted);
-  font-size: 14px;
-  pointer-events: none;
-}
-
-.s3-img-wrap {
+.s3-preview-content {
   flex: 1;
   position: relative;
   overflow: hidden;
-  cursor: grab;
+  display: flex;
 }
-.s3-img-wrap:active { cursor: grabbing; }
 
-.s3-img-el {
+.s3-preview-media {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.s3-preview-media-image { cursor: grab; }
+.s3-preview-media-image:active { cursor: grabbing; }
+
+.s3-preview-loading {
+  color: rgba(255,255,255,.5);
+  font-size: 14px;
+}
+
+.s3-preview-img {
   position: absolute;
   top: 0;
   left: 0;
   transform-origin: 0 0;
   user-select: none;
-  pointer-events: none; /* prevent drag interfering with pan */
-}
-
-.s3-img-hint {
-  text-align: center;
-  font-size: 11px;
-  color: var(--color-muted);
-  padding: 6px 0 8px;
-  flex-shrink: 0;
   pointer-events: none;
 }
 
-/* ── S3 media viewer overlay ─────────────────────────────────────────────── */
-.s3-media-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 3000;
-  background: rgba(0, 0, 0, .75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.s3-media-dialog {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  display: flex;
-  flex-direction: column;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow: hidden;
-  box-shadow: 0 8px 40px rgba(0,0,0,.6);
-}
-
-.s3-media-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.s3-media-title {
-  font-size: 13px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text);
-}
-
-.s3-media-close {
-  background: none !important;
-  border: none !important;
-  font-size: 20px;
-  line-height: 1;
-  color: var(--color-muted) !important;
-  cursor: pointer;
-  padding: 2px 6px !important;
-  flex-shrink: 0;
-}
-.s3-media-close:hover { color: var(--color-text) !important; }
-
-.s3-media-body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  flex: 1;
-  min-height: 80px;
-}
-
-.s3-media-loading {
-  color: var(--color-muted);
-  font-size: 14px;
-}
-
-.s3-media-video {
-  max-width: min(80vw, 960px);
-  max-height: 75vh;
+.s3-preview-video {
+  max-width:  min(92vw, 1200px);
+  max-height: calc(100vh - 100px);
   border-radius: 4px;
   outline: none;
 }
 
-.s3-media-audio {
-  width: min(480px, 80vw);
+.s3-preview-audio { width: min(480px, 80vw); }
+
+.s3-preview-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  background: rgba(0,0,0,.5) !important;
+  border: none !important;
+  color: #fff !important;
+  font-size: 32px;
+  line-height: 1;
+  padding: 16px 10px !important;
+  cursor: pointer;
+  border-radius: 4px !important;
+  opacity: .7;
+  transition: opacity .15s;
+}
+.s3-preview-nav:hover:not(:disabled) { opacity: 1; }
+.s3-preview-nav:disabled { opacity: .18; cursor: default; }
+.s3-preview-prev { left:  10px; }
+.s3-preview-next { right: 10px; }
+
+.s3-preview-hint {
+  text-align: center;
+  font-size: 11px;
+  color: rgba(255,255,255,.35);
+  padding: 5px 0 8px;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 /* ── S3 navigation buttons ───────────────────────────────────────────────── */

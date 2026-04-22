@@ -7,6 +7,7 @@ const { getAwsConfig, saveAwsConfig, setStore } = require('./aws/config');
 const s3 = require('./aws/s3');
 const video = require('./tools/video');
 const render = require('./tools/render');
+const audio = require('./tools/audio');
 
 // Persistent local settings store
 const store = new Store({
@@ -189,3 +190,24 @@ ipcMain.handle('video:cancelRender', () => {
   render.cancelRender();
   return { ok: true };
 });
+
+// ─── IPC: Audio ───────────────────────────────────────────────────────────────
+
+ipcMain.handle('audio:getInstruments', () => audio.getInstruments());
+
+ipcMain.handle('audio:getCachedSamples', (_event, { instrument }) =>
+  audio.getCachedSamples(instrument)
+);
+
+ipcMain.handle('audio:ensureSamples', async (event, { instrument }) => {
+  return audio.ensureSamples({ instrument }, (progress) => {
+    event.sender.send('audio:sample-progress', progress);
+  });
+});
+
+ipcMain.handle('audio:listProjects', (_event, opts) => audio.listProjects(opts));
+ipcMain.handle('audio:createProject', (_event, opts) => audio.createProject(opts));
+ipcMain.handle('audio:readProject', (_event, opts) => audio.readProject(opts));
+ipcMain.handle('audio:saveProject', (_event, opts) => audio.saveProject(opts));
+ipcMain.handle('audio:showExportDialog', (_event, opts) => audio.showExportDialog(opts));
+ipcMain.handle('audio:writeExportFile', (_event, opts) => audio.writeExportFile(opts));

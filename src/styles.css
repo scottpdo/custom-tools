@@ -789,3 +789,84 @@ label input  { width: 360px; }
 ::-webkit-scrollbar-track        { background: transparent; }
 ::-webkit-scrollbar-thumb        { background: var(--color-border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover  { background: var(--color-muted); }
+
+/* ── Audio Editor ────────────────────────────────────────────────────────── */
+
+.ae-hidden              { display: none !important; }
+#panel-audio-editor     { overflow: hidden; }
+
+#ae-projects-view,
+#ae-editor-view         { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; }
+
+#ae-projects-view .panel-body { max-width: 640px; }
+#ae-new-project-input   { width: 200px; }
+
+/* Transport bar */
+.ae-transport           { display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+                          background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+                          flex-shrink: 0; }
+.ae-transport-btn       { background: var(--color-surface2) !important; border: none !important;
+                          border-radius: 4px !important; width: 30px !important; height: 30px !important;
+                          padding: 0 !important; color: var(--color-text) !important; font-size: 13px;
+                          cursor: pointer; }
+.ae-transport-sep       { width: 1px; height: 20px; background: var(--color-border); flex-shrink: 0; }
+.ae-transport-label     { display: flex; flex-direction: column; gap: 2px; font-size: 11px;
+                          color: var(--color-muted); }
+.ae-transport-label input,
+.ae-transport-label select { width: 60px; padding: 3px 6px; font-size: 12px; }
+.ae-position            { font-size: 12px; color: var(--color-muted); font-family: monospace;
+                          min-width: 48px; }
+
+/* Workspace split */
+.ae-workspace           { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+
+/* Track list */
+.ae-tracks              { width: 200px; flex-shrink: 0; border-right: 1px solid var(--color-border);
+                          display: flex; flex-direction: column; overflow-y: auto; }
+.ae-track               { padding: 8px 10px; border-bottom: 1px solid var(--color-border);
+                          cursor: pointer; transition: background .1s; }
+.ae-track:hover         { background: var(--color-surface2); }
+.ae-track.ae-track-active { background: rgba(79,142,247,0.12);
+                            border-left: 3px solid var(--color-accent); }
+.ae-track-header        { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.ae-track-select-indicator { width: 8px; height: 8px; border-radius: 50%;
+                             background: var(--color-border); flex-shrink: 0; }
+.ae-track-active .ae-track-select-indicator { background: var(--color-accent); }
+.ae-track-name          { flex: 1; font-size: 12px; font-weight: 600; }
+.ae-track-mute          { background: var(--color-surface2) !important; border: 1px solid var(--color-border) !important;
+                          border-radius: 3px !important; padding: 1px 6px !important; font-size: 11px;
+                          color: var(--color-muted) !important; cursor: pointer; flex-shrink: 0; }
+.ae-track-mute.ae-muted { background: var(--color-warning) !important; color: #000 !important;
+                          border-color: var(--color-warning) !important; }
+.ae-track-controls      { display: flex; align-items: center; gap: 6px; }
+.ae-instr-select        { flex: 1; font-size: 11px; padding: 2px 4px; min-width: 0; }
+.ae-vol-slider          { width: 50px; flex-shrink: 0; }
+.ae-load-indicator      { font-size: 10px; color: var(--color-muted); min-width: 40px; }
+
+/* Piano roll outer grid */
+.ae-roll-outer          { display: grid; grid-template-columns: 52px 1fr;
+                          grid-template-rows: 28px 1fr; flex: 1; overflow: hidden; min-height: 0; }
+.ae-roll-corner         { background: var(--color-surface2);
+                          border-right: 1px solid var(--color-border);
+                          border-bottom: 1px solid var(--color-border); }
+.ae-ruler-container     { overflow: hidden; background: var(--color-surface2);
+                          border-bottom: 1px solid var(--color-border); }
+.ae-keyboard-container  { overflow: hidden; border-right: 1px solid var(--color-border); }
+.ae-grid-container      { overflow: scroll; cursor: crosshair; }
+
+/* Back / save buttons */
+.ae-back-btn            { background: var(--color-surface2) !important; color: var(--color-text) !important; }
+.ae-save-btn:disabled   { background: var(--color-surface2) !important; color: var(--color-success) !important;
+                          opacity: 1 !important; cursor: default; }
+
+/* Export progress bar */
+.ae-export-panel        { display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+                          background: var(--color-surface); border-top: 1px solid var(--color-border);
+                          flex-shrink: 0; }
+.ae-export-label        { font-size: 13px; white-space: nowrap; flex-shrink: 0; }
+.ae-export-pct          { font-size: 12px; color: var(--color-muted); white-space: nowrap;
+                          flex-shrink: 0; min-width: 32px; text-align: right; }
+.ae-export-track        { flex: 1; height: 5px; background: var(--color-border);
+                          border-radius: 3px; overflow: hidden; }
+.ae-export-fill         { height: 100%; background: var(--color-accent); border-radius: 3px;
+                          transition: width .25s linear; }

@@ -49,4 +49,20 @@ contextBridge.exposeInMainWorld('api', {
     onRenderProgress: (cb) => ipcRenderer.on('video:render-progress', (_e, data) => cb(data)),
     offRenderProgress: () => ipcRenderer.removeAllListeners('video:render-progress'),
   },
+
+  // ── Audio ─────────────────────────────────────────────────────────────────
+  audio: {
+    getInstruments: () => invoke('audio:getInstruments'),
+    getCachedSamples: (opts) => invoke('audio:getCachedSamples', opts),
+    ensureSamples: (opts) => invoke('audio:ensureSamples', opts),
+    listProjects: (opts) => invoke('audio:listProjects', opts),
+    createProject: (opts) => invoke('audio:createProject', opts),
+    readProject: (opts) => invoke('audio:readProject', opts),
+    saveProject: (opts) => invoke('audio:saveProject', opts),
+    showExportDialog: (opts) => invoke('audio:showExportDialog', opts),
+    writeExportFile: (opts) => invoke('audio:writeExportFile', opts),
+    // Push-style sample download progress
+    onSampleProgress: (cb) => ipcRenderer.on('audio:sample-progress', (_e, data) => cb(data)),
+    offSampleProgress: () => ipcRenderer.removeAllListeners('audio:sample-progress'),
+  },
 });

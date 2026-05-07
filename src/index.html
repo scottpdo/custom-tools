@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' file:; img-src 'self' https:;" />
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' file:; img-src 'self' https:; connect-src 'self' file:; worker-src 'self' blob:;" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Custom Tools</title>
   <link rel="stylesheet" href="styles.css" />
@@ -31,13 +31,14 @@
           <span class="nav-icon">🎬</span> Video Editor
         </button>
 
+        <button class="nav-item" data-tool="audio-editor">
+          <span class="nav-icon">🎵</span> Audio Editor
+        </button>
+
         <!-- Placeholder tools — swap out for real ones later -->
         <div class="nav-section-label">Coming Soon</div>
         <button class="nav-item disabled" disabled>
           <span class="nav-icon">📝</span> CMS
-        </button>
-        <button class="nav-item disabled" disabled>
-          <span class="nav-icon">🎵</span> Audio Editor
         </button>
       </nav>
 
@@ -182,6 +183,101 @@
 
       </section>
 
+      <!-- Audio Editor panel -->
+      <section class="panel" id="panel-audio-editor">
+
+        <!-- View: Project list -->
+        <div id="ae-projects-view">
+          <div class="panel-header">
+            <h1>Audio Editor</h1>
+            <div class="toolbar">
+              <input type="text" id="ae-new-project-input" placeholder="New project name…" />
+              <button id="ae-create-project-btn">Create Project</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="ae-projects-list">
+              <p class="muted">Loading projects…</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- View: Editor -->
+        <div id="ae-editor-view" class="ae-hidden">
+
+          <!-- Header -->
+          <div class="panel-header">
+            <button id="ae-back-btn" class="ae-back-btn">← Projects</button>
+            <h1 id="ae-project-title">Project</h1>
+            <div class="toolbar">
+              <button id="ae-save-btn" class="ae-save-btn" disabled>Saved ✓</button>
+              <button id="ae-export-btn">Export WAV…</button>
+            </div>
+          </div>
+
+          <!-- Transport bar -->
+          <div id="ae-transport" class="ae-transport">
+            <button id="ae-play-btn" class="ae-transport-btn" title="Play (Space)">▶</button>
+            <button id="ae-stop-btn" class="ae-transport-btn" title="Stop">■</button>
+            <div class="ae-transport-sep"></div>
+            <label class="ae-transport-label">BPM
+              <input type="number" id="ae-bpm-input" value="120" min="40" max="240" />
+            </label>
+            <div class="ae-transport-sep"></div>
+            <label class="ae-transport-label">Bars
+              <input type="number" id="ae-bars-input" value="8" min="1" max="64" />
+            </label>
+            <div class="ae-transport-sep"></div>
+            <label class="ae-transport-label">Snap
+              <select id="ae-snap-select">
+                <option value="4">1 bar</option>
+                <option value="2">1/2</option>
+                <option value="1" selected>1/4</option>
+                <option value="0.5">1/8</option>
+                <option value="0.25">1/16</option>
+              </select>
+            </label>
+            <div class="ae-transport-sep"></div>
+            <span id="ae-position-display" class="ae-position">1 : 1</span>
+          </div>
+
+          <!-- Workspace: track list + piano roll -->
+          <div class="ae-workspace">
+
+            <!-- Track list -->
+            <div id="ae-tracks" class="ae-tracks">
+              <!-- populated by JS -->
+            </div>
+
+            <!-- Piano roll -->
+            <div class="ae-roll-outer" id="ae-roll-outer">
+              <div class="ae-roll-corner"></div>
+              <div class="ae-ruler-container" id="ae-ruler-container">
+                <canvas id="ae-ruler-canvas"></canvas>
+              </div>
+              <div class="ae-keyboard-container" id="ae-keyboard-container">
+                <canvas id="ae-keyboard-canvas"></canvas>
+              </div>
+              <div class="ae-grid-container" id="ae-grid-container">
+                <canvas id="ae-grid-canvas"></canvas>
+              </div>
+            </div>
+
+          </div><!-- .ae-workspace -->
+
+          <!-- Export progress (hidden until export starts) -->
+          <div id="ae-export-panel" class="ae-export-panel ae-hidden">
+            <span id="ae-export-label" class="ae-export-label">Rendering…</span>
+            <div class="ae-export-track">
+              <div id="ae-export-fill" class="ae-export-fill"></div>
+            </div>
+            <span id="ae-export-pct" class="ae-export-pct">0%</span>
+          </div>
+
+        </div><!-- #ae-editor-view -->
+
+      </section>
+
       <!-- Settings panel -->
       <section class="panel" id="panel-settings">
         <div class="panel-header"><h1>Settings</h1></div>
@@ -224,5 +320,14 @@
 
   <script src="renderer.js"></script>
   <script src="tools/video-editor.js"></script>
+  <script src="../node_modules/tone/build/Tone.js"></script>
+  <script src="tools/ae-constants.js"></script>
+  <script src="tools/ae-utils.js"></script>
+  <script src="tools/ae-draw.js"></script>
+  <script src="tools/ae-tracks.js"></script>
+  <script src="tools/ae-transport.js"></script>
+  <script src="tools/ae-projects.js"></script>
+  <script src="tools/ae-export.js"></script>
+  <script src="tools/audio-editor.js"></script>
 </body>
 </html>
